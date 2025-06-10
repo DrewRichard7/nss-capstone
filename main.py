@@ -1,43 +1,25 @@
-# import libraries
-from typing import Optional
-
-import requests
-from bs4 import BeautifulSoup
-
-
-def get_status(endpoint: str) -> Optional[BeautifulSoup]:
-    """
-    Get the status of an endpoint.
-    Args:
-        endpoint (str): the url of the endpoint
-    Returns:
-        str: the status of the endpoint
-    """
-    try:
-        response = requests.get(endpoint)
-        status = response.status_code
-        if status == 200:
-            print(f"\nResponse code: {status}\nStatus OK")
-            soup = BeautifulSoup(response.text, features="html.parser")
-            return soup
-        else:
-            print(f"Response code: {status}. Status not OK")
-            return None
-    except Exception as e:
-        print(f"Error getting endpoint: {e}")
-        return None
+from pybaseball import standings
+import pandas as pd
 
 
 def main():
-    """
-    Main function to run the script.
-    """
-    endpoint = "https://www.pgatour.com/stats"
-    soup = get_status(endpoint)
-    if soup is not None and not soup.empty:
-        print("\nSoup found!")
+    print("Getting MLB standings from the year 2016...")
+    # The function returns a list of DataFrames, one for each division
+    mlb_standings_list = standings(2016)
+
+    if not mlb_standings_list:
+        print("Could not retrieve standings for 2016. The list is empty.")
     else:
-        print("\nNO SOUP FOR YOU!")
+        print("Successfully retrieved standings. Displaying by division:")
+        # Loop through the list and print each division's standings DataFrame
+        for i, division_df in enumerate(mlb_standings_list):
+            print(f"\n--- Division {i + 1} ---")
+            print(division_df)
+
+        # To combine all divisions into a single DataFrame, you can use pandas.concat
+        print("\n--- Combined Standings ---")
+        all_standings_df = pd.concat(mlb_standings_list)
+        print(all_standings_df)
 
 
 if __name__ == "__main__":
