@@ -11,6 +11,7 @@ dependencies = [
     "pandas>=2.2.3",
     "pybaseball",
     "requests>=2.32.3",
+    "scikit-learn>=1.7.0",
     "selenium>=4.33.0",
     "undetected-chromedriver>=3.5.5",
     "webdriver-manager>=4.0.2",
