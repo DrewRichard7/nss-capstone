@@ -1,7 +1,8 @@
+# multiclass classification for predicting the World Series winner
+# import libraries
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
 
 # Years for training and validation
 train_years = [y for y in range(2010, 2024) if y != 2020]
@@ -35,8 +36,8 @@ X_val = X_val.apply(pd.to_numeric, errors="coerce").fillna(0)
 clf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight="balanced")
 clf.fit(X_train, y_train)
 
-# Predict probabilities for 2024
-probs = clf.predict_proba(X_val)[:, 1]  # Probability of being the winner
+# Predict probabilities of being the winner for 2024
+probs = clf.predict_proba(X_val)[:, 1]  # type: ignore
 
 # Find the predicted winner
 winner_idx = np.argmax(probs)
