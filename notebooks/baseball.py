@@ -5,12 +5,33 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from datetime import datetime
 
 URL = "https://www.mlb.com/stats/team"
+SKIP_YEARS = {1994, 2020}
+# We only have playoff data through 2024
+MAX_PLAYOFF_YEAR = max(range(1990, 2025))  # 2024 last year w/ playoff data
 
-# World Series champions by year (2010-2024, skipping 2020)
+# World Series champions by year (1990–2024)
 champions = {
+    1990: "Cincinnati Reds",
+    1991: "Minnesota Twins",
+    1992: "Toronto Blue Jays",
+    1993: "Toronto Blue Jays",
+    1995: "Atlanta Braves",
+    1996: "New York Yankees",
+    1997: "Florida Marlins",
+    1998: "New York Yankees",
+    1999: "New York Yankees",
+    2000: "New York Yankees",
+    2001: "Arizona Diamondbacks",
+    2002: "Anaheim Angels",
+    2003: "Florida Marlins",
+    2004: "Boston Red Sox",
+    2005: "Chicago White Sox",
+    2006: "St. Louis Cardinals",
+    2007: "Boston Red Sox",
+    2008: "Philadelphia Phillies",
+    2009: "New York Yankees",
     2010: "San Francisco Giants",
     2011: "St. Louis Cardinals",
     2012: "San Francisco Giants",
@@ -21,6 +42,7 @@ champions = {
     2017: "Houston Astros",
     2018: "Boston Red Sox",
     2019: "Washington Nationals",
+    2020: "Los Angeles Dodgers",
     2021: "Atlanta Braves",
     2022: "Houston Astros",
     2023: "Texas Rangers",
@@ -29,145 +51,193 @@ champions = {
 
 
 def handle_cookies(driver):
+    """Dismiss the GDPR/cookie banner if present."""
     try:
-        cookie_close_btn = WebDriverWait(driver, 5).until(
+        print("looking for cookie banner…")
+        btn = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, "button.ot-close-icon"))
         )
-        cookie_close_btn.click()
-        time.sleep(3)
-    except Exception as e:
-        print(f"No cookie banner found: {e}")
+        btn.click()
+        time.sleep(2)
+    except Exception:
+        pass
 
 
 def select_year(driver, year):
-    dropdowns = WebDriverWait(driver, 20).until(
-        EC.presence_of_all_elements_located(
-            (By.CSS_SELECTOR, "div.bui-dropdown__control")
-        )
+    """Open the year dropdown and pick `year`."""
+    print(f"Selecting year: {year}")
+    year_dd = WebDriverWait(driver, 35).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "div.bui-dropdown__control"))
     )
-    # The first dropdown is the year selector
-    year_dropdown = dropdowns[0]
-    year_dropdown.click()
-    time.sleep(3)
-    year_option = WebDriverWait(driver, 20).until(
-        EC.element_to_be_clickable(
-            (
-                By.XPATH,
-                f"//div[contains(@class, 'bui-dropdown__option') and text()='{year}']",
-            )
-        )
+    year_dd.click()
+    time.sleep(1)
+    opt_xpath = (
+        f"//div[contains(@class,'bui-dropdown__option')"
+        f" and normalize-space(text())='{year}']"
     )
-    year_option.click()
-    time.sleep(3)
+    year_opt = WebDriverWait(driver, 35).until(
+        EC.presence_of_element_located((By.XPATH, opt_xpath))
+    )
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", year_opt)
+    time.sleep(0.5)
+    WebDriverWait(driver, 35).until(
+        EC.element_to_be_clickable((By.XPATH, opt_xpath))
+    ).click()
+    time.sleep(2)
 
 
 def select_split(driver, split_name="Pre All-Star"):
-    # Find all dropdowns
-    dropdowns = WebDriverWait(driver, 20).until(
+    """Select the split (e.g. Pre All-Star) from its dropdown."""
+    print(f"Selecting split: {split_name}")
+    dropdowns = WebDriverWait(driver, 35).until(
         EC.presence_of_all_elements_located(
             (By.CSS_SELECTOR, "div.bui-dropdown__control")
         )
     )
-    # Find the one with the label "Select a Split"
-    split_dropdown = None
-    for dd in dropdowns:
-        try:
-            if "Select a Split" in dd.text:
-                split_dropdown = dd
-                break
-        except Exception:
-            continue
-    if split_dropdown is None:
-        # Fallback: try to find the one with "None" as the first option
-        for dd in dropdowns:
-            dd.click()
-            time.sleep(2)
-            options = driver.find_elements(By.CSS_SELECTOR, "div.bui-dropdown__option")
-            if any("None" in opt.text for opt in options):
-                split_dropdown = dd
-                break
-            dd.click()  # close it
-            time.sleep(2)
-    if split_dropdown is None:
-        raise Exception("Could not find the split dropdown!")
-    split_dropdown.click()
-    time.sleep(3)
-    split_option = WebDriverWait(driver, 20).until(
+    split_dd = next((dd for dd in dropdowns if "Select a Split" in dd.text), None)
+    if split_dd is None:
+        raise RuntimeError("Could not find the split dropdown")
+    split_dd.click()
+    time.sleep(1)
+    opt = WebDriverWait(driver, 35).until(
         EC.element_to_be_clickable(
             (
                 By.XPATH,
-                f"//div[contains(@class, 'bui-dropdown__option') and text()='{split_name}']",
+                f"//div[contains(@class,'bui-dropdown__option')"
+                f" and normalize-space(text())='{split_name}']",
             )
         )
     )
-    split_option.click()
-    time.sleep(3)
+    opt.click()
+    time.sleep(2)
+
+
+def select_game_type(driver, game_type_name="Postseason"):
+    """Select a game type (Regular Season / Postseason / etc.)."""
+    print(f"Selecting game type: {game_type_name}")
+    ctrl_xpath = (
+        "//div[contains(@class,'stats-filter-gametype')]"
+        "//div[contains(@class,'bui-dropdown__control')]"
+    )
+    game_dd = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.XPATH, ctrl_xpath))
+    )
+    game_dd.click()
+    time.sleep(1)
+    opt_xpath = (
+        "//div[contains(@class,'stats-filter-gametype')]"
+        "//div[contains(@class,'bui-dropdown__option')"
+        f" and normalize-space(text())='{game_type_name}']"
+    )
+    opt = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.XPATH, opt_xpath))
+    )
+    opt.click()
+    time.sleep(2)
+
+
+def select_tab(driver, tab_name="Hitting"):
+    """Switch between the Hitting/Pitching tabs."""
+    print(f"Selecting tab: {tab_name}")
+    btn = WebDriverWait(driver, 35).until(
+        EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, f'button[role="tab"][aria-label="{tab_name}"]')
+        )
+    )
+    if btn.get_attribute("aria-selected") != "true":
+        btn.click()
+        time.sleep(2)
 
 
 def scrape_table(driver):
-    wait = WebDriverWait(driver, 30)
-    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.bui-table")))
-
+    """Parse the currently visible team-stats table into a DataFrame."""
+    print("Scraping table…")
+    WebDriverWait(driver, 35).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "table.bui-table"))
+    )
     driver.execute_script("""
-        const table = document.querySelector('table.bui-table');
-        if (table) {
-            table.scrollLeft = table.scrollWidth;
-        }
+        const t = document.querySelector('table.bui-table');
+        if (t) { t.scrollLeft = t.scrollWidth; }
     """)
-    time.sleep(2)
-
-    html_content = driver.page_source
-    soup = BeautifulSoup(html_content, "html.parser")
-    stats_table = soup.find("table", class_="bui-table")
-    if not stats_table:
-        raise Exception("Table element not found")
-
-    headers = ["TEAM"]
-    for th in stats_table.select("thead tr th:not([aria-hidden='true'])"):
-        if th.get_text(strip=True).startswith("TEAM"):
-            continue
-        header_text = th.get_text(" ", strip=True)
-        clean_header = header_text.split()[0]
-        headers.append(clean_header)
-
-    all_rows_data = []
-    for row in stats_table.select("tbody tr"):
-        team_name = row.find("th").get_text(strip=True)
-        cells = row.find_all("td")
-        row_data = [team_name] + [cell.get_text(strip=True) for cell in cells]
-        all_rows_data.append(row_data)
-
-    df = pd.DataFrame(all_rows_data, columns=headers)
-    df = df.rename(columns={"caret-up": "HR"})
-    return df
+    time.sleep(1)
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    table = soup.find("table", class_="bui-table")
+    headers = [
+        th.get_text(" ", strip=True).split()[0]
+        for th in table.select("thead tr th:not([aria-hidden='true'])")
+    ]
+    rows = []
+    for tr in table.select("tbody tr"):
+        rows.append([cell.get_text(strip=True) for cell in tr.find_all(["th", "td"])])
+    return pd.DataFrame(rows, columns=headers)
 
 
 def add_world_series_column(df, year):
-    champion = champions.get(year)
-    if champion:
-        df["WON_WORLD_SERIES"] = df["TEAM"].str.contains(champion, case=False, na=False)
-    else:
-        df["WON_WORLD_SERIES"] = False
+    """Add a boolean WON_WORLD_SERIES based on our champions dict."""
+    print(f"Adding World Series column for {year}")
+    champ = champions.get(year)
+    df["WON_WORLD_SERIES"] = (
+        df["TEAM"].str.contains(champ, case=False, na=False) if champ else False
+    )
     return df
 
 
-def scrape_mlb_stats():
-    current_year = datetime.now().year
-    years = [y for y in range(current_year, current_year - 16, -1) if y != 2020]
+def clean_and_merge(h_df, p_df):
+    """
+    Prefix H_ and P_ to hitting/pitching stats, strip digits from TEAM,
+    then merge on TEAM and LEAGUE.
+    """
+    print("Cleaning & merging Hitting/Pitching")
+    h_rename = {c: f"H_{c}" for c in h_df.columns if c not in ("TEAM", "LEAGUE")}
+    p_rename = {c: f"P_{c}" for c in p_df.columns if c not in ("TEAM", "LEAGUE")}
+    h_df = h_df.rename(columns=h_rename)
+    h_df["TEAM"] = h_df["TEAM"].str.replace(r"\d+", "", regex=True)
+    p_df = p_df.rename(columns=p_rename)
+    p_df["TEAM"] = p_df["TEAM"].str.replace(r"\d+", "", regex=True)
+    return pd.merge(h_df, p_df, on=["TEAM", "LEAGUE"], how="outer")
 
+
+def scrape_mlb_stats():
+    """Main scraper: for each year, get pre‐All‐Star stats + playoff flag."""
+    years = [y for y in range(2022, 2023) if y not in SKIP_YEARS]
     driver = uc.Chrome()
     try:
         for year in years:
-            print(f"\nScraping year: {year}")
+            print(f"\n=== Year {year} ===")
             driver.get(URL)
             handle_cookies(driver)
+
+            # 1) Pre-All-Star Hitting & Pitching
             select_year(driver, year)
             select_split(driver, "Pre All-Star")
-            df = scrape_table(driver)
-            df = add_world_series_column(df, year)
-            filename = f"../data/mlb_team_stats_{year}_pre_all_star.csv"
-            df.to_csv(filename, index=False)
-            print(f"Saved: {filename}")
+            select_tab(driver, "Hitting")
+            h_df = scrape_table(driver)
+            select_tab(driver, "Pitching")
+            select_year(driver, year)
+            p_df = scrape_table(driver)
+
+            # 2) Merge & World Series flag
+            merged = clean_and_merge(h_df, p_df)
+            merged = add_world_series_column(merged, year)
+
+            # 3) If year ≤ MAX_PLAYOFF_YEAR, scrape Postseason teams
+            if year <= MAX_PLAYOFF_YEAR:
+                # select_tab(driver, "Hitting")
+                select_split(driver, "Post All-Star")
+                select_year(driver, year)
+                select_game_type(driver, "Postseason")
+                po_df = scrape_table(driver)
+                po_df["TEAM"] = po_df["TEAM"].str.replace(r"\d+", "", regex=True)
+                playoff_teams = set(po_df["TEAM"])
+                merged["MADE_PLAYOFFS"] = merged["TEAM"].isin(playoff_teams)
+            else:
+                print(f"Skipping postseason for {year} (no data yet)")
+                merged["MADE_PLAYOFFS"] = False
+
+            # 4) Save to CSV
+            fn = f"../data/mlb_team_stats_{year}_pre_all_star.csv"
+            merged.to_csv(fn, index=False)
+            print("Saved", fn)
             time.sleep(2)
     finally:
         driver.quit()
