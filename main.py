@@ -1,63 +1,152 @@
-# multiclass classification for predicting the World Series winner
-# import libraries
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+# ======== Import necessary libraries ========
+import os
+import glob  # for finding file paths via pattern matching
+import re  # for extracting year from filename
+import pickle  # for serializing the trained model
 
-# Years for training and validation
-train_years = [y for y in range(2010, 2024) if y != 2020]
-val_year = 2024
+import pandas as pd  # for CSV I/O and DataFrame operations
+import xgboost as xgb  # for training the Gradient Boosted Trees
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+)
 
-# Load and concatenate training data
-dfs = []
-for year in train_years:
-    df = pd.read_csv(f"./data/mlb_team_stats_{year}_pre_all_star.csv")
-    df["YEAR"] = year  # Optionally add year as a feature
-    dfs.append(df)
-train_df = pd.concat(dfs, ignore_index=True)
+# ======== Locate all yearly CSVs ========
+print("======== Locating CSV files ========")
+pattern = "data/mlb_team_stats_*_pre_all_star.csv"
+all_files = sorted(glob.glob(pattern))  # get list of all matching CSV files
+print(f"======== Found {len(all_files)} files ========")
 
-# Load validation data
-val_df = pd.read_csv(f"./data/mlb_team_stats_{val_year}_pre_all_star.csv")
-val_df["YEAR"] = val_year
+# ======== Split into train (<=2023) and val (2024) ========
+train_dfs = []
+val_dfs = []
+for path in all_files:
+    m = re.search(r"_(\d{4})_", path)  # extract the four-digit year
+    if not m:
+        continue
+    year = int(m.group(1))
+    print(f"======== Reading {os.path.basename(path)} (year={year}) ========")
+    df = pd.read_csv(path)
+    if year < 2024:
+        train_dfs.append(df)  # append to training list
+    elif year == 2024:
+        val_dfs.append(df)  # append to validation list
+    # any files for year >2024 are ignored for now
 
-# Prepare features and target
-drop_cols = ["TEAM", "LEAGUE", "WON_WORLD_SERIES"]  # TEAM and LEAGUE are not numeric
-X_train = train_df.drop(columns=drop_cols)
-y_train = train_df["WON_WORLD_SERIES"].astype(int)
+# concatenate all yearly DataFrames into one large train/val set
+df_train = pd.concat(train_dfs, ignore_index=True)
+df_val = pd.concat(val_dfs, ignore_index=True)
+print(f"======== Combined train shape: {df_train.shape} ========")
+print(f"======== Combined validation shape: {df_val.shape} ========")
 
-X_val = val_df.drop(columns=drop_cols)
-teams_2024 = val_df["TEAM"].values  # Save for output
 
-# Convert all columns to numeric (some may be object due to parsing)
-X_train = X_train.apply(pd.to_numeric, errors="coerce").fillna(0)
-X_val = X_val.apply(pd.to_numeric, errors="coerce").fillna(0)
+# ======== Preprocessing function ========
+def preprocess(df_in):
+    """
+    Clean and prepare one season's DataFrame:
+      - Drop unused ID columns
+      - Encode categorical league
+      - Convert target to numeric
+      - Clean up any columns parsed as object
+      - Split into feature matrix X and target vector y
+    """
+    df = df_in.copy()
 
-# Train model
-clf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight="balanced")
-clf.fit(X_train, y_train)
+    # Drop identifier and the alternate target we won't use now
+    df.drop(columns=["TEAM", "WON_WORLD_SERIES"], inplace=True)
 
-# Predict probabilities of being the winner for 2024
-probs = clf.predict_proba(X_val)[:, 1]  # type: ignore
+    # Map AL/NL to binary values for modeling
+    df["LEAGUE"] = df["LEAGUE"].map({"AL": 0, "NL": 1})
 
-# Find the predicted winner
-winner_idx = np.argmax(probs)
-predicted_winner = teams_2024[winner_idx]
-predicted_prob = probs[winner_idx]
+    # Our binary target (made playoffs) → integer 0/1
+    df["MADE_PLAYOFFS"] = df["MADE_PLAYOFFS"].astype(int)
 
-# Feature importances
-importances = clf.feature_importances_
-feature_names = X_train.columns
-sorted_idx = np.argsort(importances)[::-1]
+    # Find any remaining object-typed columns (e.g. numeric data read as strings)
+    obj_cols = df.select_dtypes(include="object").columns
+    for c in obj_cols:
+        # strip non-numeric chars then cast to float
+        df[c] = (
+            df[c]
+            .astype(str)
+            .str.replace(r"[^\d\.\-]", "", regex=True)
+            .replace("", "0")
+            .astype(float)
+        )
 
-# Output
-print("=== 2024 World Series Winner Prediction ===")
-print(f"Predicted Winner: {predicted_winner}")
-print(f"Predicted Probability: {predicted_prob:.4f}\n")
+    # Replace any NaNs introduced in conversion
+    df.fillna(0, inplace=True)
 
-print("=== All 2024 Teams and Their Probabilities ===")
-for team, prob in zip(teams_2024, probs):
-    print(f"{team:30s}  {prob:.4f}")
+    # All columns except the target become features
+    feature_cols = [c for c in df.columns if c != "MADE_PLAYOFFS"]
+    X = df[feature_cols]
+    y = df["MADE_PLAYOFFS"]
+    return X, y
 
-print("\n=== Top 10 Feature Importances ===")
-for idx in sorted_idx[:10]:
-    print(f"{feature_names[idx]:20s}: {importances[idx]:.4f}")
+
+# ======== Preprocess train & validation ========
+print("======== Preprocessing data ========")
+X_train, y_train = preprocess(df_train)
+X_val, y_val = preprocess(df_val)
+
+# ======== Create XGBoost DMatrix objects ========
+print("======== Creating DMatrix ========")
+# DMatrix is the optimized internal data structure for XGBoost
+dtrain = xgb.DMatrix(X_train, label=y_train)
+dval = xgb.DMatrix(X_val, label=y_val)
+
+# ======== Set XGBoost parameters ========
+params = {
+    "objective": "binary:logistic",  # for binary classification
+    "eval_metric": "logloss",  # training/validation loss
+    "tree_method": "hist",  # fast histogram-based splits
+    "eta": 0.1,  # learning rate
+    "max_depth": 6,  # maximum tree depth
+    "subsample": 0.8,  # row subsample ratio
+    "colsample_bytree": 0.8,  # feature subsample ratio
+    "seed": 42,  # for reproducibility
+}
+
+# ======== Train with early stopping ========
+print("======== Training with early stopping ========")
+# provide both train and validation DMatrix for monitoring
+evals = [(dtrain, "train"), (dval, "validation")]
+bst = xgb.train(
+    params,
+    dtrain,
+    num_boost_round=500,  # maximum number of boosting rounds
+    evals=evals,
+    early_stopping_rounds=10,  # stop if no improvement on validation
+    verbose_eval=True,  # print progress every round
+)
+
+# ======== Evaluate on 2024 validation set ========
+print("======== Evaluating on 2024 data ========")
+# get predicted probabilities and convert to binary labels
+y_proba = bst.predict(dval)
+y_pred = (y_proba > 0.5).astype(int)
+
+# print(f"Accuracy  : {accuracy_score(y_val, y_pred):.4f}")
+print(f"ROC AUC   : {roc_auc_score(y_val, y_proba):.4f}")
+print("Classification Report:")
+print(classification_report(y_val, y_pred))
+print("Confusion Matrix:")
+print(confusion_matrix(y_val, y_pred))
+
+# ======== Feature importances ========
+print("======== Top 10 feature importances ========")
+# get_score returns a dict: feature_name → importance weight
+imps = bst.get_score(importance_type="weight")
+# sort and list top 10 by weight
+top10 = sorted(imps.items(), key=lambda x: x[1], reverse=True)[:10]
+for feat, score in top10:
+    print(f"{feat}: {score}")
+
+# ======== Save the trained Booster as a pickle ========
+print("======== Saving model to pickle ========")
+# save_raw() returns the internal model bytes
+raw = bst.save_raw()
+with open("./assets/xgb_playoffs.pkl", "wb") as f:
+    pickle.dump(raw, f)
+print("======== Model pickled to assets/xgb_playoffs.pkl ========")

@@ -199,7 +199,7 @@ def clean_and_merge(h_df, p_df):
 
 def scrape_mlb_stats():
     """Main scraper: for each year, get pre‐All‐Star stats + playoff flag."""
-    years = [y for y in range(2022, 2023) if y not in SKIP_YEARS]
+    years = [y for y in range(1990, 2026) if y not in SKIP_YEARS]
     driver = uc.Chrome()
     try:
         for year in years:
