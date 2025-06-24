@@ -235,7 +235,7 @@ def scrape_mlb_stats():
                 merged["MADE_PLAYOFFS"] = False
 
             # 4) Save to CSV
-            fn = f"../data/mlb_team_stats_{year}_pre_all_star.csv"
+            fn = f"/data/mlb_team_stats_{year}_pre_all_star.csv"
             merged.to_csv(fn, index=False)
             print("Saved", fn)
             time.sleep(2)
