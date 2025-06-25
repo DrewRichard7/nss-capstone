@@ -23,7 +23,7 @@ if len(all_files) == 0:
     print("ERROR: No CSV files found!")
     print(f"Looking for pattern: {pattern}")
     print("Please run the data collection script first:")
-    print("  python notebooks/baseball.py")
+    print("  python defs/baseball.py")
     print("or use FirstTimeRun.sh for complete setup")
     exit(1)
 

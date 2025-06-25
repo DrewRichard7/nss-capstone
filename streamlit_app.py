@@ -688,3 +688,20 @@ if show_raw_data:
         st.error(
             f"Could not load data for {selected_year}. File may not exist."
         )
+
+# ======== DATA SOURCE CITATION ========
+st.markdown("---")
+st.markdown(
+    """
+    ### Data Source
+    **Primary Data Source**: [MLB.com Team Statistics](https://www.mlb.com/stats/team)
+    - Historical team batting and pitching statistics (1990-2025)
+    - Playoff results and World Series winners
+    - Data collected via web scraping with proper rate limiting
+
+    **Citation**: Major League Baseball. (n.d.). *Team Stats*. MLB.com. https://www.mlb.com/stats/team
+
+    ---
+    **Author**: Andrew Richard | **Program**: NSS Data Science Cohort 8
+    """
+)

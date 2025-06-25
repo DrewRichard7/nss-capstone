@@ -27,14 +27,14 @@ This automatically:
 uv venv && source .venv/bin/activate && uv sync
 
 # 2. Data Collection
-python notebooks/baseball.py 2018 2023    # Command line
-python notebooks/baseball.py              # Interactive mode
+python defs/baseball.py 2018 2023    # Command line
+python defs/baseball.py              # Interactive mode
 
 # 3. Data Cleaning
-python notebooks/clean_data.py
+python defs/clean_data.py
 
 # 4. Model Training
-python notebooks/xgb_model.py
+python models/xgb_model.py
 
 # 5. Launch App
 streamlit run streamlit_app.py
@@ -59,7 +59,7 @@ Choose your data scope based on needs:
 ### Development & Testing
 ```bash
 ./FirstTimeRun.sh 2023 2023          # Single year test
-python notebooks/baseball.py 2022 2023  # Recent data only
+python defs/baseball.py 2022 2023  # Recent data only
 ```
 
 ### Analysis & Research
@@ -70,7 +70,7 @@ python notebooks/baseball.py 2022 2023  # Recent data only
 
 ### Interactive Mode
 ```bash
-python notebooks/baseball.py
+python defs/baseball.py
 # Prompts for start/end years with validation
 ```
 
@@ -120,10 +120,14 @@ chmod +x FirstTimeRun.sh             # Make executable
 
 ```
 capstone/
-├── notebooks/
+├── defs/
 │   ├── baseball.py          # Data collection with year input
 │   ├── clean_data.py        # Data preprocessing
-│   └── xgb_model.py         # Model training
+│   └── url_tester.py        # URL testing utility
+├── models/
+│   └── xgb_model.py         # Model training scripts
+├── notebooks/
+│   └── eda.ipynb            # Exploratory data analysis
 ├── data/                    # CSV files (created by scripts)
 ├── assets/                  # Trained models (created by scripts)
 ├── FirstTimeRun.sh          # Automated setup script
@@ -147,8 +151,16 @@ Managed with `uv` (fast Python package manager):
 - streamlit: Dashboard
 - See `pyproject.toml` for complete list
 
+## Data Source
+
+**Primary Data Source**: [MLB.com Team Statistics](https://www.mlb.com/stats/team)
+- Historical team batting and pitching statistics (1990-2025)
+- Playoff results and World Series winners
+- Data collected via web scraping with proper rate limiting
+
+**Citation**: Major League Baseball. (n.d.). *Team Stats*. MLB.com. https://www.mlb.com/stats/team
+
 ---
 
 **Author**: Andrew Richard  
-**Program**: NSS Data Science Cohort 8  
-**Data Source**: MLB.com team statistics
+**Program**: NSS Data Science Cohort 8

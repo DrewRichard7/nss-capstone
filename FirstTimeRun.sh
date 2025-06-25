@@ -153,19 +153,19 @@ echo ""
 echo "Step 5: Collecting MLB data for years $START_YEAR-$END_YEAR..."
 echo "This may take several minutes as it scrapes data from multiple years..."
 echo "Note: Years 1994 and 2020 will be automatically excluded if in range"
-uv run notebooks/baseball.py "$START_YEAR" "$END_YEAR"
+uv run defs/baseball.py "$START_YEAR" "$END_YEAR"
 
 # Step 6: Clean the collected data
 echo ""
 echo "Step 6: Cleaning collected data..."
-uv run notebooks/clean_data.py
+uv run defs/clean_data.py
 
 # Step 7: Train the model
 echo ""
 echo "Step 7: Training the XGBoost model..."
 echo "This will create the trained model in the assets directory..."
 mkdir -p assets
-uv run notebooks/xgb_model.py
+uv run models/xgb_model.py
 
 # Step 8: Launch the Streamlit app
 echo ""
