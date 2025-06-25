@@ -1,3 +1,5 @@
+import glob
+import os
 import pickle
 
 import matplotlib.pyplot as plt
@@ -38,6 +40,35 @@ def load_validation_data(path="data/mlb_team_stats_2024_pre_all_star.csv"):
     df = pd.read_csv(path)
     X, y, team_info = preprocess(df)
     return X, y, team_info
+
+
+# ======== Get available years from data directory ========
+@st.cache_data
+def get_available_years():
+    """Get list of years available in the data directory"""
+    data_files = glob.glob("data/mlb_team_stats_*_pre_all_star.csv")
+    years = []
+    for file in data_files:
+        # Extract year from filename
+        basename = os.path.basename(file)
+        year = basename.split("_")[3]  # mlb_team_stats_YEAR_pre_all_star.csv
+        try:
+            years.append(int(year))
+        except ValueError:
+            continue
+    return sorted(years)
+
+
+# ======== Load raw data for a specific year ========
+@st.cache_data
+def load_raw_data(year):
+    """Load raw data for a specific year"""
+    file_path = f"data/mlb_team_stats_{year}_pre_all_star.csv"
+    try:
+        df = pd.read_csv(file_path)
+        return df
+    except FileNotFoundError:
+        return None
 
 
 # ======== Preprocessing function ========
@@ -132,6 +163,19 @@ uploaded_file = st.sidebar.file_uploader(
     "Upload 2025 Pre‐All‐Star CSV", type="csv"
 )
 
+st.sidebar.header("Visualization Options")
+show_confusion_matrix = st.sidebar.checkbox("Show Confusion Matrix")
+show_roc_curve = st.sidebar.checkbox("Show ROC Curve")
+
+st.sidebar.header("Data Explorer")
+available_years = get_available_years()
+selected_year = st.sidebar.selectbox(
+    "Select Year",
+    available_years,
+    index=len(available_years) - 1,  # Default to most recent year
+)
+show_raw_data = st.sidebar.checkbox("Show Raw Data")
+
 # ======== Load model & validation data ========
 bst = load_model()
 X_val, y_val, team_info_val = load_validation_data()
@@ -153,36 +197,42 @@ accuracy = accuracy_score(y_val, y_pred)
 roc_auc = roc_auc_score(y_val, y_proba)
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Accuracy", f"{accuracy:.2%}")
+col1.metric("Model Accuracy", f"{accuracy:.2%}")
 col2.metric("ROC AUC", f"{roc_auc:.3f}")
 
 if enforce_constraints:
     # Show playoff distribution
     predicted_playoffs = np.sum(y_pred)
-    col3.metric("Predicted Playoff Teams", f"{predicted_playoffs}/12")
+    col3.metric("Predicted Playoff Teams (Check)", f"{predicted_playoffs}/12")
 else:
     predicted_playoffs = np.sum(y_pred)
     col3.metric("Predicted Playoff Teams", f"{predicted_playoffs}")
 
-# ======== Confusion Matrix ========
-st.subheader("Confusion Matrix")
-cm = confusion_matrix(y_val, y_pred)
-fig, ax = plt.subplots()
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-ax.set_xlabel("Predicted")
-ax.set_ylabel("Actual")
-st.pyplot(fig)
+# ======== Conditional Visualizations ========
+if show_confusion_matrix or show_roc_curve:
+    col1, col2 = st.columns(2)
 
-# ======== ROC Curve ========
-st.subheader("ROC Curve")
-fpr, tpr, _ = roc_curve(y_val, y_proba)
-fig2, ax2 = plt.subplots()
-ax2.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
-ax2.plot([0, 1], [0, 1], "--", color="gray")
-ax2.set_xlabel("False Positive Rate")
-ax2.set_ylabel("True Positive Rate")
-ax2.legend(loc="lower right")
-st.pyplot(fig2)
+    if show_confusion_matrix:
+        with col1:
+            st.subheader("Confusion Matrix")
+            cm = confusion_matrix(y_val, y_pred)
+            fig, ax = plt.subplots(figsize=(4, 3))
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+            ax.set_xlabel("Predicted")
+            ax.set_ylabel("Actual")
+            st.pyplot(fig)
+
+    if show_roc_curve:
+        with col2:
+            st.subheader("ROC Curve")
+            fpr, tpr, _ = roc_curve(y_val, y_proba)
+            fig2, ax2 = plt.subplots(figsize=(4, 3))
+            ax2.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
+            ax2.plot([0, 1], [0, 1], "--", color="gray")
+            ax2.set_xlabel("False Positive Rate")
+            ax2.set_ylabel("True Positive Rate")
+            ax2.legend(loc="lower right")
+            st.pyplot(fig2)
 
 # ======== Validation Results with Constraints ========
 if enforce_constraints and val_rankings is not None:
@@ -225,14 +275,50 @@ if enforce_constraints and val_rankings is not None:
         )
 
 # ======== Feature Importances ========
-st.subheader("Top 10 Feature Importances")
+st.subheader("Feature Importances by Category")
 imps = bst.get_score(importance_type="weight")
-imp_df = (
-    pd.DataFrame.from_dict(imps, orient="index", columns=["weight"])
-    .sort_values("weight", ascending=False)
-    .head(10)
-)
-st.bar_chart(imp_df)
+imp_df = pd.DataFrame.from_dict(
+    imps, orient="index", columns=["weight"]
+).sort_values("weight", ascending=False)
+
+# Create three columns for the tables
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.write("**Top Hitting Features**")
+    hitting_features = imp_df[imp_df.index.str.startswith("H_")].head(5)
+    if not hitting_features.empty:
+        hitting_display = hitting_features.reset_index()
+        hitting_display.columns = ["Feature", "Importance"]
+        hitting_display["Feature"] = hitting_display["Feature"].str.replace(
+            "H_", ""
+        )
+        st.dataframe(hitting_display, hide_index=True)
+    else:
+        st.write("No hitting features found")
+
+with col2:
+    st.write("**Top Pitching Features**")
+    pitching_features = imp_df[imp_df.index.str.startswith("P_")].head(5)
+    if not pitching_features.empty:
+        pitching_display = pitching_features.reset_index()
+        pitching_display.columns = ["Feature", "Importance"]
+        pitching_display["Feature"] = pitching_display["Feature"].str.replace(
+            "P_", ""
+        )
+        st.dataframe(pitching_display, hide_index=True)
+    else:
+        st.write("No pitching features found")
+
+with col3:
+    st.write("**Top Overall Features**")
+    top_features = imp_df.head(5)
+    if not top_features.empty:
+        top_display = top_features.reset_index()
+        top_display.columns = ["Feature", "Importance"]
+        st.dataframe(top_display, hide_index=True)
+    else:
+        st.write("No features found")
 
 
 # ======== Test playoff constraints with sample data ========
@@ -486,4 +572,119 @@ if uploaded_file:
             .sort_values("Playoff_Prob", ascending=False)
             .reset_index(drop=True)
             .rename(columns={"TEAM": "Team", "LEAGUE": "League"})
+        )
+
+
+# ======== Raw Data Display ========
+if show_raw_data:
+    st.header(f"{selected_year} MLB Pre-All-Star Break Team Statistics")
+
+    raw_data = load_raw_data(selected_year)
+    if raw_data is not None:
+        # Display summary stats
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Teams", len(raw_data))
+        col2.metric("AL Teams", len(raw_data[raw_data["LEAGUE"] == "AL"]))
+        col3.metric("NL Teams", len(raw_data[raw_data["LEAGUE"] == "NL"]))
+
+        if "MADE_PLAYOFFS" in raw_data.columns:
+            playoff_teams = raw_data["MADE_PLAYOFFS"].sum()
+            col4.metric("Playoff Teams", playoff_teams)
+        else:
+            col4.metric("Playoff Teams", "N/A")
+
+        # Filter options
+        st.subheader("Filter Options")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            league_filter = st.selectbox(
+                "Filter by League",
+                ["All", "AL", "NL"],
+                key=f"league_filter_{selected_year}",
+            )
+
+        with col2:
+            if "MADE_PLAYOFFS" in raw_data.columns:
+                playoff_filter = st.selectbox(
+                    "Filter by Playoff Status",
+                    ["All", "Made Playoffs", "Missed Playoffs"],
+                    key=f"playoff_filter_{selected_year}",
+                )
+            else:
+                playoff_filter = "All"
+
+        # Apply filters
+        filtered_data = raw_data.copy()
+
+        if league_filter != "All":
+            filtered_data = filtered_data[
+                filtered_data["LEAGUE"] == league_filter
+            ]
+
+        if playoff_filter != "All" and "MADE_PLAYOFFS" in raw_data.columns:
+            if playoff_filter == "Made Playoffs":
+                filtered_data = filtered_data[
+                    filtered_data["MADE_PLAYOFFS"] == True
+                ]
+            else:
+                filtered_data = filtered_data[
+                    filtered_data["MADE_PLAYOFFS"] == False
+                ]
+
+        # Column selection
+        st.subheader("Column Selection")
+        col_categories = st.multiselect(
+            "Show Categories",
+            ["Basic Info", "Hitting Stats", "Pitching Stats", "Results"],
+            default=["Basic Info", "Results"],
+            key=f"col_categories_{selected_year}",
+        )
+
+        # Define column groups
+        basic_cols = ["TEAM", "LEAGUE"]
+        hitting_cols = [col for col in raw_data.columns if col.startswith("H_")]
+        pitching_cols = [
+            col for col in raw_data.columns if col.startswith("P_")
+        ]
+        result_cols = []
+        if "MADE_PLAYOFFS" in raw_data.columns:
+            result_cols.append("MADE_PLAYOFFS")
+        if "WON_WORLD_SERIES" in raw_data.columns:
+            result_cols.append("WON_WORLD_SERIES")
+
+        # Build display columns
+        display_cols = []
+        if "Basic Info" in col_categories:
+            display_cols.extend(basic_cols)
+        if "Hitting Stats" in col_categories:
+            display_cols.extend(hitting_cols)
+        if "Pitching Stats" in col_categories:
+            display_cols.extend(pitching_cols)
+        if "Results" in col_categories:
+            display_cols.extend(result_cols)
+
+        # Display the filtered data
+        st.subheader(f"Data ({len(filtered_data)} teams)")
+        if display_cols:
+            st.dataframe(
+                filtered_data[display_cols].sort_values("TEAM"),
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.info("Please select at least one category to display data.")
+
+        # Download option
+        csv = filtered_data.to_csv(index=False)
+        st.download_button(
+            label=f"Download {selected_year} Data as CSV",
+            data=csv,
+            file_name=f"mlb_stats_{selected_year}_filtered.csv",
+            mime="text/csv",
+        )
+
+    else:
+        st.error(
+            f"Could not load data for {selected_year}. File may not exist."
         )

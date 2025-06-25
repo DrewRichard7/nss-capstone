@@ -1,10 +1,17 @@
+import re
+import subprocess
 import time
+
 import pandas as pd
-from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
 
 URL = "https://www.mlb.com/stats/team"
 SKIP_YEARS = {1994, 2020}
@@ -55,7 +62,9 @@ def handle_cookies(driver):
     try:
         print("looking for cookie banner…")
         btn = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button.ot-close-icon"))
+            EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, "button.ot-close-icon")
+            )
         )
         btn.click()
         time.sleep(2)
@@ -67,7 +76,9 @@ def select_year(driver, year):
     """Open the year dropdown and pick `year`."""
     print(f"Selecting year: {year}")
     year_dd = WebDriverWait(driver, 35).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, "div.bui-dropdown__control"))
+        EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, "div.bui-dropdown__control")
+        )
     )
     year_dd.click()
     time.sleep(1)
@@ -78,7 +89,9 @@ def select_year(driver, year):
     year_opt = WebDriverWait(driver, 35).until(
         EC.presence_of_element_located((By.XPATH, opt_xpath))
     )
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", year_opt)
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block:'center'});", year_opt
+    )
     time.sleep(0.5)
     WebDriverWait(driver, 35).until(
         EC.element_to_be_clickable((By.XPATH, opt_xpath))
@@ -94,7 +107,9 @@ def select_split(driver, split_name="Pre All-Star"):
             (By.CSS_SELECTOR, "div.bui-dropdown__control")
         )
     )
-    split_dd = next((dd for dd in dropdowns if "Select a Split" in dd.text), None)
+    split_dd = next(
+        (dd for dd in dropdowns if "Select a Split" in dd.text), None
+    )
     if split_dd is None:
         raise RuntimeError("Could not find the split dropdown")
     split_dd.click()
@@ -168,7 +183,9 @@ def scrape_table(driver):
     ]
     rows = []
     for tr in table.select("tbody tr"):
-        rows.append([cell.get_text(strip=True) for cell in tr.find_all(["th", "td"])])
+        rows.append(
+            [cell.get_text(strip=True) for cell in tr.find_all(["th", "td"])]
+        )
     return pd.DataFrame(rows, columns=headers)
 
 
@@ -188,8 +205,12 @@ def clean_and_merge(h_df, p_df):
     then merge on TEAM and LEAGUE.
     """
     print("Cleaning & merging Hitting/Pitching")
-    h_rename = {c: f"H_{c}" for c in h_df.columns if c not in ("TEAM", "LEAGUE")}
-    p_rename = {c: f"P_{c}" for c in p_df.columns if c not in ("TEAM", "LEAGUE")}
+    h_rename = {
+        c: f"H_{c}" for c in h_df.columns if c not in ("TEAM", "LEAGUE")
+    }
+    p_rename = {
+        c: f"P_{c}" for c in p_df.columns if c not in ("TEAM", "LEAGUE")
+    }
     h_df = h_df.rename(columns=h_rename)
     h_df["TEAM"] = h_df["TEAM"].str.replace(r"\d+", "", regex=True)
     p_df = p_df.rename(columns=p_rename)
@@ -197,10 +218,80 @@ def clean_and_merge(h_df, p_df):
     return pd.merge(h_df, p_df, on=["TEAM", "LEAGUE"], how="outer")
 
 
+def get_chrome_version():
+    """Get the current Chrome version installed on the system."""
+    try:
+        result = subprocess.run(
+            [
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "--version",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        version_match = re.search(r"(\d+)\.", result.stdout)
+        if version_match:
+            return int(version_match.group(1))
+    except Exception as e:
+        print(f"Could not detect Chrome version: {e}")
+    return None
+
+
+def create_chrome_driver():
+    """Create Chrome driver with proper version handling."""
+    chrome_version = get_chrome_version()
+
+    # Try undetected-chromedriver first with minimal options
+    try:
+        if chrome_version:
+            print(f"Detected Chrome version: {chrome_version}")
+            # Try to use specific version
+            driver = uc.Chrome(version_main=chrome_version)
+        else:
+            # Fallback to auto-detection
+            driver = uc.Chrome()
+        print("Successfully created undetected Chrome driver")
+        return driver
+    except Exception as e:
+        print(f"Error creating undetected Chrome driver: {e}")
+        print("Trying with webdriver-manager...")
+
+        # Fallback to webdriver-manager with minimal options
+        chrome_options = Options()
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        try:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("Successfully created Chrome driver with webdriver-manager")
+            return driver
+        except Exception as e2:
+            print(
+                f"Failed to create Chrome driver with webdriver-manager: {e2}"
+            )
+
+            # Last resort: try regular selenium without service
+            try:
+                driver = webdriver.Chrome(options=chrome_options)
+                print(
+                    "Successfully created Chrome driver with default selenium"
+                )
+                return driver
+            except Exception as e3:
+                print(f"All Chrome driver creation methods failed: {e3}")
+                print(
+                    "Please ensure Chrome is installed and update it to the latest version."
+                )
+                print("You can also try installing ChromeDriver manually.")
+                raise
+
+
 def scrape_mlb_stats():
     """Main scraper: for each year, get pre‐All‐Star stats + playoff flag."""
     years = [y for y in range(1990, 2026) if y not in SKIP_YEARS]
-    driver = uc.Chrome()
+    driver = create_chrome_driver()
     try:
         for year in years:
             print(f"\n=== Year {year} ===")
@@ -227,7 +318,9 @@ def scrape_mlb_stats():
                 select_year(driver, year)
                 select_game_type(driver, "Postseason")
                 po_df = scrape_table(driver)
-                po_df["TEAM"] = po_df["TEAM"].str.replace(r"\d+", "", regex=True)
+                po_df["TEAM"] = po_df["TEAM"].str.replace(
+                    r"\d+", "", regex=True
+                )
                 playoff_teams = set(po_df["TEAM"])
                 merged["MADE_PLAYOFFS"] = merged["TEAM"].isin(playoff_teams)
             else:
@@ -235,7 +328,7 @@ def scrape_mlb_stats():
                 merged["MADE_PLAYOFFS"] = False
 
             # 4) Save to CSV
-            fn = f"/data/mlb_team_stats_{year}_pre_all_star.csv"
+            fn = f"data/mlb_team_stats_{year}_pre_all_star.csv"
             merged.to_csv(fn, index=False)
             print("Saved", fn)
             time.sleep(2)
