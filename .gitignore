@@ -11,4 +11,5 @@ wheels/
 
 # don't upload data
 data/
-
+data.bak/
+data.bak

@@ -1,5 +1,6 @@
 import re
 import subprocess
+import sys
 import time
 
 import pandas as pd
@@ -15,8 +16,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 URL = "https://www.mlb.com/stats/team"
 SKIP_YEARS = {1994, 2020}
+MIN_YEAR = 1990
+MAX_YEAR = 2025
 # We only have playoff data through 2024
-MAX_PLAYOFF_YEAR = max(range(1990, 2025))  # 2024 last year w/ playoff data
+MAX_PLAYOFF_YEAR = max(
+    range(MIN_YEAR, MAX_YEAR)
+)  # 2024 last year w/ playoff data
 
 # World Series champions by year (1990–2024)
 champions = {
@@ -288,10 +293,105 @@ def create_chrome_driver():
                 raise
 
 
-def scrape_mlb_stats():
+def get_user_input():
+    """Get start and end year from user with validation."""
+    print("MLB Data Scraper")
+    print("================")
+    print(f"Available years: {MIN_YEAR}-{MAX_YEAR}")
+    print(
+        f"Note: Years {sorted(SKIP_YEARS)} are automatically excluded (no data available)"
+    )
+    print()
+
+    while True:
+        try:
+            start_year_input = input(
+                f"Enter start year ({MIN_YEAR}-{MAX_YEAR}): "
+            ).strip()
+            if not start_year_input:
+                print("Please enter a valid year.")
+                continue
+            start_year = int(start_year_input)
+
+            if start_year < MIN_YEAR or start_year > MAX_YEAR:
+                print(f"Start year must be between {MIN_YEAR} and {MAX_YEAR}")
+                continue
+
+            break
+        except ValueError:
+            print("Please enter a valid number.")
+            continue
+
+    while True:
+        try:
+            end_year_input = input(
+                f"Enter end year ({start_year}-{MAX_YEAR}): "
+            ).strip()
+            if not end_year_input:
+                print("Please enter a valid year.")
+                continue
+            end_year = int(end_year_input)
+
+            if end_year < start_year:
+                print("End year must be greater than or equal to start year.")
+                continue
+            if end_year > MAX_YEAR:
+                print(f"End year must be {MAX_YEAR} or earlier.")
+                continue
+
+            break
+        except ValueError:
+            print("Please enter a valid number.")
+            continue
+
+    return start_year, end_year
+
+
+def scrape_mlb_stats(start_year=None, end_year=None, interactive=True):
     """Main scraper: for each year, get pre‐All‐Star stats + playoff flag."""
-    years = [y for y in range(1990, 2026) if y not in SKIP_YEARS]
+    if start_year is None or end_year is None:
+        start_year, end_year = get_user_input()
+
+    # Generate years list excluding skip years
+    years = [y for y in range(start_year, end_year + 1) if y not in SKIP_YEARS]
+
+    if not years:
+        print(f"No valid years to process between {start_year} and {end_year}")
+        print(f"Excluded years: {sorted(SKIP_YEARS)}")
+        return
+
+    print(f"\nProcessing years: {years}")
+    print(f"Total years to process: {len(years)}")
+
+    # If excluded years exist in the range, show them
+    excluded_in_range = [
+        y for y in range(start_year, end_year + 1) if y in SKIP_YEARS
+    ]
+    if excluded_in_range:
+        print(f"Excluded years in range: {excluded_in_range}")
+
+    # Interactive confirmation for user input mode
+    if interactive and len(sys.argv) == 1:
+        print("\nThis will scrape MLB data for the specified years.")
+        print(
+            "The process may take several minutes depending on the number of years."
+        )
+        while True:
+            confirm = (
+                input("\nDo you want to continue? (y/n): ").strip().lower()
+            )
+            if confirm in ["y", "yes"]:
+                break
+            elif confirm in ["n", "no"]:
+                print("Scraping cancelled.")
+                return
+            else:
+                print("Please enter 'y' or 'n'")
+
+    print()
+
     driver = create_chrome_driver()
+
     try:
         for year in years:
             print(f"\n=== Year {year} ===")
@@ -337,4 +437,32 @@ def scrape_mlb_stats():
 
 
 if __name__ == "__main__":
-    scrape_mlb_stats()
+    # Check if running non-interactively (e.g., from FirstTimeRun.sh)
+    if len(sys.argv) > 1:
+        try:
+            start_year = int(sys.argv[1])
+            end_year = int(sys.argv[2]) if len(sys.argv) > 2 else MAX_YEAR
+
+            # Validate arguments
+            if start_year < MIN_YEAR or start_year > MAX_YEAR:
+                print(
+                    f"Error: Start year must be between {MIN_YEAR} and {MAX_YEAR}"
+                )
+                sys.exit(1)
+            if end_year < start_year or end_year > MAX_YEAR:
+                print(
+                    f"Error: End year must be between {start_year} and {MAX_YEAR}"
+                )
+                sys.exit(1)
+
+            print(
+                f"Running with command line arguments: {start_year}-{end_year}"
+            )
+            scrape_mlb_stats(start_year, end_year, interactive=False)
+        except ValueError:
+            print("Error: Please provide valid year arguments")
+            print("Usage: python baseball.py [start_year] [end_year]")
+            sys.exit(1)
+    else:
+        # Interactive mode
+        scrape_mlb_stats(interactive=True)

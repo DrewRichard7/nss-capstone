@@ -14,9 +14,18 @@ from sklearn.metrics import (
 
 # ======== Locate all yearly CSVs ========
 print("======== Locating CSV files ========")
-pattern = "../data/mlb_team_stats_*_pre_all_star.csv"
+pattern = "data/mlb_team_stats_*_pre_all_star.csv"
 all_files = sorted(glob.glob(pattern))  # get list of all matching CSV files
 print(f"======== Found {len(all_files)} files ========")
+
+# Check if any files were found
+if len(all_files) == 0:
+    print("ERROR: No CSV files found!")
+    print(f"Looking for pattern: {pattern}")
+    print("Please run the data collection script first:")
+    print("  python notebooks/baseball.py")
+    print("or use FirstTimeRun.sh for complete setup")
+    exit(1)
 
 # ======== Split into train (<=2023) and val (2024) ========
 train_dfs = []
@@ -34,11 +43,24 @@ for path in all_files:
         val_dfs.append(df)  # append to validation list
     # any files for year >2024 are ignored for now
 
+# Check if we have training data
+if len(train_dfs) == 0:
+    print("ERROR: No training data found (no files with years < 2024)!")
+    print("Please ensure you have collected data for years before 2024.")
+    exit(1)
+
 # concatenate all yearly DataFrames into one large train/val set
 df_train = pd.concat(train_dfs, ignore_index=True)
-df_val = pd.concat(val_dfs, ignore_index=True)
+
+# Handle validation data (may be empty if no 2024 data)
+if len(val_dfs) > 0:
+    df_val = pd.concat(val_dfs, ignore_index=True)
+    print(f"======== Combined validation shape: {df_val.shape} ========")
+else:
+    df_val = None
+    print("======== No 2024 validation data found ========")
+
 print(f"======== Combined train shape: {df_train.shape} ========")
-print(f"======== Combined validation shape: {df_val.shape} ========")
 
 
 # ======== Preprocessing function ========
@@ -87,13 +109,19 @@ def preprocess(df_in):
 # ======== Preprocess train & validation ========
 print("======== Preprocessing data ========")
 X_train, y_train = preprocess(df_train)
-X_val, y_val = preprocess(df_val)
 
 # ======== Create XGBoost DMatrix objects ========
 print("======== Creating DMatrix ========")
 # DMatrix is the optimized internal data structure for XGBoost
 dtrain = xgb.DMatrix(X_train, label=y_train)
-dval = xgb.DMatrix(X_val, label=y_val)
+
+# Only create validation DMatrix if we have validation data
+if df_val is not None:
+    X_val, y_val = preprocess(df_val)
+    dval = xgb.DMatrix(X_val, label=y_val)
+else:
+    dval = None
+    X_val, y_val = None, None
 
 # ======== Set XGBoost parameters ========
 params = {
@@ -108,30 +136,45 @@ params = {
 }
 
 # ======== Train with early stopping ========
-print("======== Training with early stopping ========")
-# provide both train and validation DMatrix for monitoring
-evals = [(dtrain, "train"), (dval, "validation")]
-bst = xgb.train(
-    params,
-    dtrain,
-    num_boost_round=500,  # maximum number of boosting rounds
-    evals=evals,
-    early_stopping_rounds=10,  # stop if no improvement on validation
-    verbose_eval=True,  # print progress every round
-)
+if dval is not None:
+    print("======== Training with early stopping ========")
+    # provide both train and validation DMatrix for monitoring
+    evals = [(dtrain, "train"), (dval, "validation")]
+    bst = xgb.train(
+        params,
+        dtrain,
+        num_boost_round=500,  # maximum number of boosting rounds
+        evals=evals,
+        early_stopping_rounds=10,  # stop if no improvement on validation
+        verbose_eval=True,  # print progress every round
+    )
+else:
+    print("======== Training without validation (no 2024 data) ========")
+    # train with just the training set
+    evals = [(dtrain, "train")]
+    bst = xgb.train(
+        params,
+        dtrain,
+        num_boost_round=100,  # fewer rounds without validation
+        evals=evals,
+        verbose_eval=True,  # print progress every round
+    )
 
 # ======== Evaluate on 2024 validation set ========
-print("======== Evaluating on 2024 data ========")
-# get predicted probabilities and convert to binary labels
-y_proba = bst.predict(dval)
-y_pred = (y_proba > 0.5).astype(int)
+if dval is not None and y_val is not None:
+    print("======== Evaluating on 2024 data ========")
+    # get predicted probabilities and convert to binary labels
+    y_proba = bst.predict(dval)
+    y_pred = (y_proba > 0.5).astype(int)
 
-# print(f"Accuracy  : {accuracy_score(y_val, y_pred):.4f}")
-print(f"ROC AUC   : {roc_auc_score(y_val, y_proba):.4f}")
-print("Classification Report:")
-print(classification_report(y_val, y_pred))
-print("Confusion Matrix:")
-print(confusion_matrix(y_val, y_pred))
+    # print(f"Accuracy  : {accuracy_score(y_val, y_pred):.4f}")
+    print(f"ROC AUC   : {roc_auc_score(y_val, y_proba):.4f}")
+    print("Classification Report:")
+    print(classification_report(y_val, y_pred))
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_val, y_pred))
+else:
+    print("======== Skipping validation evaluation (no 2024 data) ========")
 
 # ======== Feature importances ========
 print("======== Top 10 feature importances ========")
@@ -144,8 +187,10 @@ for feat, score in top10:
 
 # ======== Save the trained Booster as a pickle ========
 print("======== Saving model to pickle ========")
+# Ensure assets directory exists
+os.makedirs("assets", exist_ok=True)
 # save_raw() returns the internal model bytes
 raw = bst.save_raw()
-with open("../assets/xgb_playoffs.pkl", "wb") as f:
+with open("assets/xgb_playoffs.pkl", "wb") as f:
     pickle.dump(raw, f)
-print("======== Model pickled to ../assets/xgb_playoffs.pkl ========")
+print("======== Model pickled to assets/xgb_playoffs.pkl ========")
