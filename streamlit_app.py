@@ -188,6 +188,13 @@ if enforce_constraints and team_info_val is not None:
         y_proba, X_val["LEAGUE"].values, team_info_val["TEAM"].values
     )
     y_pred = y_pred_constrained.astype(int)
+    # Add actual playoff results to val_rankings
+    val_rankings["actual_playoffs"] = y_val.values
+    # Calculate correctness for summary
+    val_rankings["correct"] = (
+        val_rankings["makes_playoffs_constrained"]
+        == val_rankings["actual_playoffs"]
+    )
 else:
     y_pred = (y_proba > threshold).astype(int)
     val_rankings = None
@@ -243,15 +250,37 @@ if enforce_constraints and val_rankings is not None:
     with col1:
         st.write("**American League**")
         al_teams = val_rankings[val_rankings["league_name"] == "AL"].copy()
-        al_teams["status"] = al_teams["makes_playoffs_constrained"].apply(
-            lambda x: "✅ Playoffs" if x else "❌ Miss"
+        al_teams["predicted"] = al_teams["makes_playoffs_constrained"].apply(
+            lambda x: "✅ Yes" if x else "❌ No"
+        )
+        al_teams["actual"] = al_teams["actual_playoffs"].apply(
+            lambda x: "✅ Yes" if x else "❌ No"
+        )
+        al_teams["correct"] = (
+            al_teams["makes_playoffs_constrained"]
+            == al_teams["actual_playoffs"]
+        )
+        al_teams["result"] = al_teams["correct"].apply(
+            lambda x: "✅ Correct" if x else "❌ Wrong"
         )
         st.dataframe(
-            al_teams[["team", "probability", "league_rank", "status"]].rename(
+            al_teams[
+                [
+                    "team",
+                    "probability",
+                    "league_rank",
+                    "predicted",
+                    "actual",
+                    "result",
+                ]
+            ].rename(
                 columns={
                     "team": "Team",
                     "probability": "Playoff Prob",
                     "league_rank": "Rank",
+                    "predicted": "Predicted",
+                    "actual": "Actual",
+                    "result": "Result",
                 }
             ),
             hide_index=True,
@@ -260,19 +289,75 @@ if enforce_constraints and val_rankings is not None:
     with col2:
         st.write("**National League**")
         nl_teams = val_rankings[val_rankings["league_name"] == "NL"].copy()
-        nl_teams["status"] = nl_teams["makes_playoffs_constrained"].apply(
-            lambda x: "✅ Playoffs" if x else "❌ Miss"
+        nl_teams["predicted"] = nl_teams["makes_playoffs_constrained"].apply(
+            lambda x: "✅ Yes" if x else "❌ No"
+        )
+        nl_teams["actual"] = nl_teams["actual_playoffs"].apply(
+            lambda x: "✅ Yes" if x else "❌ No"
+        )
+        nl_teams["correct"] = (
+            nl_teams["makes_playoffs_constrained"]
+            == nl_teams["actual_playoffs"]
+        )
+        nl_teams["result"] = nl_teams["correct"].apply(
+            lambda x: "✅ Correct" if x else "❌ Wrong"
         )
         st.dataframe(
-            nl_teams[["team", "probability", "league_rank", "status"]].rename(
+            nl_teams[
+                [
+                    "team",
+                    "probability",
+                    "league_rank",
+                    "predicted",
+                    "actual",
+                    "result",
+                ]
+            ].rename(
                 columns={
                     "team": "Team",
                     "probability": "Playoff Prob",
                     "league_rank": "Rank",
+                    "predicted": "Predicted",
+                    "actual": "Actual",
+                    "result": "Result",
                 }
             ),
             hide_index=True,
         )
+
+    # Show prediction accuracy summary
+    st.subheader("2024 Playoff Prediction Summary")
+
+    # Calculate overall accuracy
+    total_teams = len(val_rankings)
+    correct_predictions = val_rankings["correct"].sum()
+    accuracy_pct = (correct_predictions / total_teams) * 100
+
+    # Calculate league-specific accuracy
+    al_correct = val_rankings[val_rankings["league_name"] == "AL"][
+        "correct"
+    ].sum()
+    al_total = len(val_rankings[val_rankings["league_name"] == "AL"])
+    al_accuracy = (al_correct / al_total) * 100
+
+    nl_correct = val_rankings[val_rankings["league_name"] == "NL"][
+        "correct"
+    ].sum()
+    nl_total = len(val_rankings[val_rankings["league_name"] == "NL"])
+    nl_accuracy = (nl_correct / nl_total) * 100
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric(
+        "Overall Accuracy",
+        f"{accuracy_pct:.1f}%",
+        f"{correct_predictions}/{total_teams}",
+    )
+    col2.metric(
+        "AL Accuracy", f"{al_accuracy:.1f}%", f"{al_correct}/{al_total}"
+    )
+    col3.metric(
+        "NL Accuracy", f"{nl_accuracy:.1f}%", f"{nl_correct}/{nl_total}"
+    )
 
 # ======== Feature Importances ========
 st.subheader("Feature Importances by Category")
