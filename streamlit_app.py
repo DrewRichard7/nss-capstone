@@ -1,10 +1,18 @@
 import glob
 import os
-import pickle
 
 import pandas as pd
 import streamlit as st
-import xgboost as xgb
+
+from models.model_utils import (
+    compare_model_metrics,
+    create_prediction_comparison_df,
+    get_ensemble_prediction,
+    get_model_agreement_stats,
+    get_model_predictions,
+    load_logistic_model,
+    load_xgboost_model,
+)
 
 # ======== Page config ========
 st.set_page_config(
@@ -14,19 +22,23 @@ st.set_page_config(
 )
 
 st.title("🏆 Current Season League Rankings & Predictions")
-st.markdown("### Latest MLB Pre-All-Star Break Analysis")
+st.markdown("### Latest MLB Pre-All-Star Break Analysis with Model Comparison")
 
 
-# ======== CACHED RESOURCE: load the XGBoost model ========
+# ======== CACHED RESOURCE: load both models ========
 @st.cache_resource
-def load_model(path="assets/xgb_playoffs.pkl"):
-    raw = pickle.load(open(path, "rb"))
-    bst = xgb.Booster()
-    bst.load_model(raw)
-    return bst
+def load_models():
+    """Load both XGBoost and Logistic Regression models"""
+    try:
+        xgb_model = load_xgboost_model()
+        logistic_model, scaler, feature_names = load_logistic_model()
+        return xgb_model, logistic_model, scaler, feature_names, True
+    except Exception as e:
+        st.error(f"Error loading models: {e}")
+        return None, None, None, None, False
 
 
-# ======== CACHED DATA: load & preprocess 2024 validation data ========
+# ======== CACHED DATA: load & preprocess validation data ========
 @st.cache_data
 def load_validation_data(path="data/mlb_team_stats_2024_pre_all_star.csv"):
     df = pd.read_csv(path)
@@ -352,10 +364,16 @@ def enforce_playoff_constraints(probabilities, leagues, team_names):
 
 # ======== Main App Content ========
 
-# Load model and get latest year data
-bst = load_model()
+# Load models and get latest year data
+xgb_model, logistic_model, scaler, feature_names, models_loaded = load_models()
 available_years = get_available_years()
 latest_year = available_years[0] if available_years else 2024
+
+if not models_loaded:
+    st.error(
+        "Failed to load models. Please ensure both models are trained and available."
+    )
+    st.stop()
 
 # Load latest year data
 latest_data = load_raw_data(latest_year)
@@ -364,9 +382,50 @@ if latest_data is not None:
     # Preprocess data
     X_latest, y_latest, team_info_latest = preprocess(latest_data)
 
-    # Make predictions
-    dlatest = xgb.DMatrix(X_latest, label=y_latest)
-    y_proba_latest = bst.predict(dlatest)
+    # Get predictions from both models
+    predictions = get_model_predictions(
+        X_latest, xgb_model, logistic_model, scaler
+    )
+
+    # Create ensemble prediction
+    ensemble_preds = get_ensemble_prediction(predictions, method="average")
+
+    # Check if we have valid playoff data for model comparison
+    has_valid_data = (
+        y_latest is not None
+        and len(y_latest.unique()) > 1
+        and y_latest.sum() > 0
+    )
+
+    # Compare model performance if we have valid actual results
+    if has_valid_data:
+        metrics_comparison = compare_model_metrics(y_latest, predictions)
+        comparison_df = create_prediction_comparison_df(
+            team_info_latest, predictions, y_latest
+        )
+        agreement_stats = get_model_agreement_stats(comparison_df)
+    else:
+        metrics_comparison = None
+        comparison_df = create_prediction_comparison_df(
+            team_info_latest, predictions
+        )
+        agreement_stats = get_model_agreement_stats(comparison_df)
+
+    # Model selection for playoff constraint enforcement
+    st.sidebar.subheader("🤖 Model Selection")
+    selected_model = st.sidebar.selectbox(
+        "Choose prediction model:",
+        ["XGBoost", "Logistic Regression", "Ensemble (Average)"],
+        index=0,
+    )
+
+    # Use selected model probabilities for playoff predictions
+    if selected_model == "XGBoost":
+        y_proba_latest = predictions["xgb_proba"]
+    elif selected_model == "Logistic Regression":
+        y_proba_latest = predictions["logistic_proba"]
+    else:  # Ensemble
+        y_proba_latest = ensemble_preds["ensemble_proba"]
 
     # Always enforce MLB playoff rules
     y_pred_constrained, latest_rankings = enforce_playoff_constraints(
@@ -375,16 +434,108 @@ if latest_data is not None:
         team_info_latest["TEAM"].values,
     )
 
-    # Add actual playoff results if available
-    if y_latest is not None:
+    # Add actual playoff results if available and valid
+    if has_valid_data:
         latest_rankings["actual_playoffs"] = y_latest.values
         latest_rankings["correct"] = (
             latest_rankings["makes_playoffs_constrained"]
             == latest_rankings["actual_playoffs"]
         )
 
-    # Display current season title
+    # Display current season title and model info
     st.header(f"{latest_year} Season Playoff Predictions")
+    if not has_valid_data:
+        st.warning(
+            f"⚠️ {latest_year} data has no playoff results. Showing predictions only."
+        )
+
+    st.info(
+        f"📊 **Active Model**: {selected_model} | 🔄 Switch models using the sidebar"
+    )
+
+    # Model Comparison Section
+    if st.checkbox("📈 Show Model Comparison", value=False):
+        st.subheader("🔍 Model Comparison Analysis")
+
+        # Agreement statistics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric(
+            "Model Agreement", f"{agreement_stats['agreement_rate']:.1%}"
+        )
+        col2.metric("Disagreements", f"{agreement_stats['disagreement_count']}")
+        col3.metric(
+            "Avg Prob Difference",
+            f"{agreement_stats['avg_prob_difference']:.3f}",
+        )
+
+        if metrics_comparison:
+            # Show accuracy comparison if actual results available
+            col4.metric(
+                "XGB Accuracy", f"{metrics_comparison['xgb']['accuracy']:.1%}"
+            )
+
+            # Detailed metrics comparison
+            st.write("**📊 Model Performance Comparison:**")
+            metrics_df = pd.DataFrame(metrics_comparison).T
+            # Remove confusion_matrix column if it exists (can't display in dataframe)
+            display_metrics = metrics_df.drop(
+                columns=["confusion_matrix"], errors="ignore"
+            )
+            display_metrics = display_metrics[
+                ["accuracy", "precision", "recall", "f1_score", "roc_auc"]
+            ]
+            st.dataframe(display_metrics.round(4), use_container_width=True)
+        else:
+            # Show alternative statistics when no actual results available
+            col4.metric("Predictions Only", "No actual results")
+            st.info(
+                "📊 **Model Performance Comparison not available** - No actual playoff results for this year."
+            )
+
+        # Team-by-team comparison
+        if st.checkbox("👥 Team-by-Team Model Comparison"):
+            st.write("**Team Prediction Comparison:**")
+
+            # Add league names for display
+            display_comparison = comparison_df.copy()
+            display_comparison["league_name"] = display_comparison[
+                "league"
+            ].map({0: "AL", 1: "NL"})
+
+            # Select columns for display
+            display_cols = [
+                "team",
+                "league_name",
+                "xgb_probability",
+                "logistic_probability",
+                "prob_difference",
+                "models_agree",
+            ]
+            col_names = {
+                "team": "Team",
+                "league_name": "League",
+                "xgb_probability": "XGB Prob",
+                "logistic_probability": "Logistic Prob",
+                "prob_difference": "Prob Diff",
+                "models_agree": "Models Agree",
+            }
+
+            if has_valid_data and "actual" in display_comparison.columns:
+                display_cols.extend(["xgb_correct", "logistic_correct"])
+                col_names.update(
+                    {
+                        "xgb_correct": "XGB Correct",
+                        "logistic_correct": "Logistic Correct",
+                    }
+                )
+
+            st.dataframe(
+                display_comparison[display_cols]
+                .rename(columns=col_names)
+                .sort_values("Prob Diff", key=abs, ascending=False),
+                hide_index=True,
+                use_container_width=True,
+            )
 
     # Define league teams in broader scope for prediction summary
     al_teams = latest_rankings[latest_rankings["league_name"] == "AL"].copy()
@@ -447,7 +598,7 @@ if latest_data is not None:
             }
 
             # Add actual results if available
-            if (
+            if has_valid_data and (
                 "actual_playoffs" in div_teams.columns
                 and "correct" in div_teams.columns
             ):
@@ -502,8 +653,8 @@ if latest_data is not None:
                 "status": "Status",
             }
 
-            # Add actual results if available
-            if (
+            # Add actual results if available and valid
+            if has_valid_data and (
                 "actual_playoffs" in div_teams.columns
                 and "correct" in div_teams.columns
             ):
@@ -562,8 +713,8 @@ if latest_data is not None:
 
         st.write("")
 
-    # Show prediction summary if we have actual results
-    if (
+    # Show prediction summary if we have valid actual results
+    if has_valid_data and (
         "actual_playoffs" in latest_rankings.columns
         and "correct" in latest_rankings.columns
     ):
@@ -695,5 +846,8 @@ else:
 # Navigation info
 st.markdown("---")
 st.info(
-    "📍 Navigate to other pages using the sidebar to explore model analysis, visualizations, and upload new data for predictions."
+    "📍 Navigate to other pages using the sidebar to explore detailed model analysis, visualizations, and upload new data for predictions."
+)
+st.info(
+    "🤖 **Model Info**: This app now uses both XGBoost and Logistic Regression models. You can switch between them or use an ensemble approach via the sidebar."
 )

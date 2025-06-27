@@ -1,6 +1,6 @@
 # MLB Playoff Prediction - Capstone Project
 
-Predicts MLB World Series winners using machine learning analysis of historical team statistics (1990-2025).
+Predicts MLB playoff outcomes using multiple machine learning models with historical team statistics (1990-2025). Features XGBoost, Logistic Regression, and ensemble predictions with comprehensive model comparison.
 
 ## Quick Start
 
@@ -17,8 +17,8 @@ This automatically:
 - Sets up Python environment with `uv`
 - Collects MLB data for specified years
 - Cleans and processes the data
-- Trains XGBoost model
-- Launches Streamlit dashboard
+- Trains both XGBoost and Logistic Regression models
+- Launches Streamlit dashboard with model comparison features
 
 ### Manual Setup
 
@@ -34,7 +34,8 @@ python defs/baseball.py              # Interactive mode
 python defs/clean_data.py
 
 # 4. Model Training
-python models/xgb_model.py
+python models/xgb_model.py          # Train XGBoost model
+python models/logistic_model.py     # Train Logistic Regression model
 
 # 5. Launch App
 streamlit run streamlit_app.py
@@ -76,18 +77,40 @@ python defs/baseball.py
 
 ## Model Performance
 
+### XGBoost Model
 - **Training Data**: 940 team records (1990-2023)
 - **Validation**: 30 team records (2024-2025)
-- **Accuracy**: 90% on 2024 validation data
-- **ROC AUC**: 96%
-- **Top Features**: Pitching losses, wins, strikeouts
+- **Accuracy**: 87% on 2024 validation data
+- **ROC AUC**: 94.4%
+- **Top Features**: Pitching losses (P_L), wins (P_W), strikeouts (H_SO)
+
+### Logistic Regression Model
+- **Training Data**: 940 team records (1990-2023)
+- **Validation**: 30 team records (2024-2025)
+- **Accuracy**: 87% on 2024 validation data
+- **ROC AUC**: 94.4%
+- **Top Features**: Pitching losses (P_L), wins (P_W), strikeouts (H_SO)
+
+### Ensemble Model
+- **Method**: Average of XGBoost and Logistic Regression probabilities
+- **Benefits**: Combines strengths of both models for robust predictions
+- **Use Case**: Default recommendation for most reliable results
+
+### Model Comparison Features
+- **Side-by-side predictions**: Compare all models on the same data
+- **Agreement analysis**: See where models agree/disagree
+- **Feature importance comparison**: Understand what each model values
+- **Interactive model selection**: Switch between models in real-time
 
 ## Data Pipeline
 
 1. **Web Scraping** (`baseball.py`): Collects team stats from MLB.com
 2. **Data Cleaning** (`clean_data.py`): Standardizes column names and formats
-3. **Model Training** (`xgb_model.py`): Trains XGBoost classifier for playoff prediction
-4. **Streamlit App** (`streamlit_app.py`): Interactive dashboard for predictions
+3. **Model Training**: 
+   - `xgb_model.py`: Trains XGBoost classifier for playoff prediction
+   - `logistic_model.py`: Trains Logistic Regression classifier with feature scaling
+4. **Model Utilities** (`models/model_utils.py`): Functions for model comparison and ensemble predictions
+5. **Streamlit App** (`streamlit_app.py`): Interactive dashboard with multi-model support
 
 ## Input Validation
 
@@ -125,7 +148,9 @@ capstone/
 │   ├── clean_data.py        # Data preprocessing
 │   └── url_tester.py        # URL testing utility
 ├── models/
-│   └── xgb_model.py         # Model training scripts
+│   ├── xgb_model.py         # XGBoost model training
+│   ├── logistic_model.py    # Logistic Regression model training
+│   └── model_utils.py       # Model comparison utilities
 ├── notebooks/
 │   └── eda.ipynb            # Exploratory data analysis
 ├── data/                    # CSV files (created by scripts)
@@ -137,10 +162,14 @@ capstone/
 ## Technical Details
 
 - **Web Scraping**: Selenium with undetected-chromedriver
-- **ML Model**: XGBoost binary classifier
+- **ML Models**: 
+  - XGBoost binary classifier with early stopping
+  - Logistic Regression with L2 regularization and feature scaling
+  - Ensemble averaging for robust predictions
 - **Data**: Team hitting/pitching stats, playoff results, World Series winners
 - **Features**: 37 statistical features per team per year
 - **Target**: Binary classification (made playoffs: yes/no)
+- **Model Selection**: Interactive comparison with agreement analysis
 
 ## Dependencies
 
