@@ -21,8 +21,8 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🏆 Current Season League Rankings & Predictions")
-st.markdown("### Latest MLB Pre-All-Star Break Analysis with Model Comparison")
+st.title("🏆 MLB 2025 Season Dashboard")
+st.markdown("### Current Season Standings & Playoff Predictions")
 
 
 # ======== CACHED RESOURCE: load both models ========
@@ -148,6 +148,17 @@ MLB_DIVISIONS = {
     "Los Angeles Dodgers": "National League West",
     "San Diego Padres": "National League West",
     "San Francisco Giants": "National League West",
+    # Historical team names for backward compatibility
+    "Cleveland Indians": "American League Central",
+    "Tampa Bay Devil Rays": "American League East",
+    "Florida Marlins": "National League East",
+    "Montreal Expos": "National League East",
+    "California Angels": "American League West",
+    "Anaheim Angels": "American League West",
+    "Los Angeles Angels of Anaheim": "American League West",
+    "St Louis Cardinals": "National League Central",  # No period version
+    "Arizona DiamondbacksDiamondbacks": "National League West",  # Duplicate issue
+    "Montreal ExposExpos": "National League East",  # Duplicate issue
 }
 
 
@@ -165,15 +176,57 @@ def enforce_mlb_playoff_rules(probabilities, leagues, team_names):
         league_rankings: DataFrame with detailed rankings including division info
     """
     # Clean team names to handle Unicode characters and duplicates
+    import re
+
     cleaned_team_names = []
     for team in team_names:
-        # Remove invisible Unicode characters and normalize
-        cleaned = team.strip()
-        # Handle specific cases
-        if "Athletics" in cleaned and cleaned != "Oakland Athletics":
+        # Remove Unicode characters and normalize
+        cleaned = re.sub(r"[^\w\s]", "", str(team)).strip()
+
+        # Remove duplicate words first (fix DiamondbacksDiamondbacks issue)
+        words = cleaned.split()
+        cleaned = " ".join(dict.fromkeys(words))
+
+        # Check for specific duplicate patterns and fix them
+        if (
+            "DiamondbacksDiamondbacks" in str(team)
+            or cleaned.count("Diamondbacks") > 1
+        ):
+            cleaned = "Arizona Diamondbacks"
+        elif "ExposExpos" in str(team) or cleaned.count("Expos") > 1:
+            cleaned = "Montreal Expos"
+        elif "IndiansIndians" in str(team) or cleaned.count("Indians") > 1:
+            cleaned = "Cleveland Guardians"
+
+        # Handle specific team name cases and duplications
+        elif "Athletics" in cleaned and "Athletics" not in [
+            "Oakland Athletics"
+        ]:
             cleaned = "Oakland Athletics"
         elif "Guardians" in cleaned and cleaned != "Cleveland Guardians":
             cleaned = "Cleveland Guardians"
+        elif "Indians" in cleaned or (
+            "Cleveland" in cleaned and "Guardians" not in cleaned
+        ):
+            cleaned = "Cleveland Guardians"  # Updated to current team name
+        elif "St Louis Cardinals" in cleaned:
+            cleaned = "St. Louis Cardinals"
+        elif "Cardinals" in cleaned and "St" in cleaned:
+            cleaned = "St. Louis Cardinals"
+        elif "Angels" in cleaned and (
+            "Los Angeles" in cleaned
+            or "Anaheim" in cleaned
+            or "California" in cleaned
+        ):
+            cleaned = "Los Angeles Angels"
+        elif "Devil Rays" in cleaned or (
+            "Tampa Bay" in cleaned and "Rays" in cleaned
+        ):
+            cleaned = "Tampa Bay Rays"
+        elif "Marlins" in cleaned and (
+            "Florida" in cleaned or "Miami" in cleaned
+        ):
+            cleaned = "Miami Marlins"
         elif "Rays" in cleaned and cleaned != "Tampa Bay Rays":
             cleaned = "Tampa Bay Rays"
         elif "Marlins" in cleaned and cleaned != "Miami Marlins":
@@ -443,99 +496,18 @@ if latest_data is not None:
         )
 
     # Display current season title and model info
-    st.header(f"{latest_year} Season Playoff Predictions")
-    if not has_valid_data:
-        st.warning(
-            f"⚠️ {latest_year} data has no playoff results. Showing predictions only."
-        )
+    st.header(f"🏆 {latest_year} Season Playoff Predictions")
 
+    # Model info with journey CTA
     st.info(
         f"📊 **Active Model**: {selected_model} | 🔄 Switch models using the sidebar"
     )
 
-    # Model Comparison Section
-    if st.checkbox("📈 Show Model Comparison", value=False):
-        st.subheader("🔍 Model Comparison Analysis")
-
-        # Agreement statistics
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric(
-            "Model Agreement", f"{agreement_stats['agreement_rate']:.1%}"
-        )
-        col2.metric("Disagreements", f"{agreement_stats['disagreement_count']}")
-        col3.metric(
-            "Avg Prob Difference",
-            f"{agreement_stats['avg_prob_difference']:.3f}",
-        )
-
-        if metrics_comparison:
-            # Show accuracy comparison if actual results available
-            col4.metric(
-                "XGB Accuracy", f"{metrics_comparison['xgb']['accuracy']:.1%}"
-            )
-
-            # Detailed metrics comparison
-            st.write("**📊 Model Performance Comparison:**")
-            metrics_df = pd.DataFrame(metrics_comparison).T
-            # Remove confusion_matrix column if it exists (can't display in dataframe)
-            display_metrics = metrics_df.drop(
-                columns=["confusion_matrix"], errors="ignore"
-            )
-            display_metrics = display_metrics[
-                ["accuracy", "precision", "recall", "f1_score", "roc_auc"]
-            ]
-            st.dataframe(display_metrics.round(4), use_container_width=True)
-        else:
-            # Show alternative statistics when no actual results available
-            col4.metric("Predictions Only", "No actual results")
-            st.info(
-                "📊 **Model Performance Comparison not available** - No actual playoff results for this year."
-            )
-
-        # Team-by-team comparison
-        if st.checkbox("👥 Team-by-Team Model Comparison"):
-            st.write("**Team Prediction Comparison:**")
-
-            # Add league names for display
-            display_comparison = comparison_df.copy()
-            display_comparison["league_name"] = display_comparison[
-                "league"
-            ].map({0: "AL", 1: "NL"})
-
-            # Select columns for display
-            display_cols = [
-                "team",
-                "league_name",
-                "xgb_probability",
-                "logistic_probability",
-                "prob_difference",
-                "models_agree",
-            ]
-            col_names = {
-                "team": "Team",
-                "league_name": "League",
-                "xgb_probability": "XGB Prob",
-                "logistic_probability": "Logistic Prob",
-                "prob_difference": "Prob Diff",
-                "models_agree": "Models Agree",
-            }
-
-            if has_valid_data and "actual" in display_comparison.columns:
-                display_cols.extend(["xgb_correct", "logistic_correct"])
-                col_names.update(
-                    {
-                        "xgb_correct": "XGB Correct",
-                        "logistic_correct": "Logistic Correct",
-                    }
-                )
-
-            st.dataframe(
-                display_comparison[display_cols]
-                .rename(columns=col_names)
-                .sort_values("Prob Diff", key=abs, ascending=False),
-                hide_index=True,
-                use_container_width=True,
-            )
+    # Journey callout
+    st.markdown("""
+    💡 **New to Machine Learning?** This dashboard shows predictions from AI models trained on 34 years of MLB data.
+    Navigate to **Model Analysis** to dive deeper into how these predictions are made and compare different algorithms!
+    """)
 
     # Define league teams in broader scope for prediction summary
     al_teams = latest_rankings[latest_rankings["league_name"] == "AL"].copy()
@@ -769,6 +741,11 @@ if latest_data is not None:
     # Bubble teams (teams just above/below cutoff)
     st.subheader("🎯 Bubble Teams")
 
+    # CTA for deeper analysis
+    st.info(
+        "🔍 **Want to understand WHY these teams are predicted as bubble teams?** Check out the **Model Analysis** page to see feature importance and model decision-making!"
+    )
+
     st.write("Teams just outside playoff contention:")
 
     # Find teams that just missed playoffs (next best in each league)
@@ -845,9 +822,40 @@ else:
 
 # Navigation info
 st.markdown("---")
+st.subheader("🎓 Continue Your Machine Learning Journey")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("""
+    ### 📊 **Model Analysis**
+    **Learn how predictions are made:**
+    - Compare XGBoost vs Logistic Regression
+    - See ROC curves and confusion matrices
+    - Understand feature importance
+    - Explore model agreement patterns
+    """)
+
+with col2:
+    st.markdown("""
+    ### 🔮 **Try Your Own Data**
+    **Upload new season data:**
+    - Test different scenarios
+    - Compare model predictions
+    - Download results for analysis
+    - Generate sample predictions
+    """)
+
+with col3:
+    st.markdown("""
+    ### 📈 **Visualizations & Insights**
+    **Explore the data science:**
+    - Interactive probability charts
+    - League performance trends
+    - Feature importance breakdowns
+    - Statistical interpretations
+    """)
+
 st.info(
-    "📍 Navigate to other pages using the sidebar to explore detailed model analysis, visualizations, and upload new data for predictions."
-)
-st.info(
-    "🤖 **Model Info**: This app now uses both XGBoost and Logistic Regression models. You can switch between them or use an ensemble approach via the sidebar."
+    "🎯 **Pro Tip**: Start with **Model Analysis** to understand how these predictions work, then try **uploading your own data** to see the models in action!"
 )

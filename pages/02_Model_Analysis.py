@@ -33,10 +33,22 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("📊 Model Analysis & Validation")
+st.title("📊 Machine Learning Model Analysis Hub")
 st.markdown(
-    "### In-depth model performance and feature analysis with model comparison"
+    "### Deep dive into model performance, validation, and algorithm comparison"
 )
+
+# Journey introduction
+st.markdown("""
+🎓 **Welcome to the Statistical Analysis Center!** This page is where the magic happens - you'll understand
+how machine learning algorithms make predictions and learn to compare different approaches.
+
+💡 **What you'll discover:**
+- How accurate are our models? (Spoiler: Pretty good!)
+- Which features matter most for predicting playoffs?
+- When do XGBoost and Logistic Regression agree or disagree?
+- How to interpret ROC curves and confusion matrices
+""")
 
 
 # ======== CACHED RESOURCE: load both models ========
@@ -91,6 +103,23 @@ if not models_loaded:
 
 available_years = get_available_years()
 
+# Sidebar configuration
+st.sidebar.subheader("🎛️ Analysis Configuration")
+
+# Model selection for comparative analysis
+st.sidebar.subheader("🤖 Primary Model Focus")
+focus_model = st.sidebar.selectbox(
+    "Choose model to highlight in analysis:",
+    [
+        "Compare All Models",
+        "XGBoost Focus",
+        "Logistic Regression Focus",
+        "Ensemble Focus",
+    ],
+    index=0,
+    help="This affects which model is emphasized in charts and summaries",
+)
+
 # Year selection
 st.sidebar.subheader("📅 Year Selection")
 # Default to 2024 if available, otherwise first available year
@@ -99,9 +128,10 @@ if available_years and 2024 in available_years:
     default_index = available_years.index(2024)
 
 selected_year = st.sidebar.selectbox(
-    "Select year for analysis:",
+    "Select year for validation analysis:",
     available_years,
     index=default_index if available_years else None,
+    help="Choose a year with actual playoff results for meaningful statistical analysis",
 )
 
 if selected_year:
@@ -143,6 +173,12 @@ if selected_year:
 
         # ======== Model Performance Overview ========
         st.header(f"🎯 Model Performance Overview ({selected_year})")
+
+        # Learning callout
+        st.markdown("""
+        📚 **Learning Moment**: We're about to see how well our AI models performed on *real* baseball data.
+        These metrics tell us if our models are actually good at predicting playoffs or just getting lucky!
+        """)
 
         if has_valid_data:
             # Calculate metrics for all models
@@ -710,21 +746,70 @@ else:
 
 # Add recommendation for better years
 if available_years:
-    st.sidebar.subheader("💡 Recommendations")
+    st.sidebar.subheader("💡 Analysis Tips")
     st.sidebar.info(
-        "**For best analysis results:**\n"
-        "- Try 2024 (most recent with playoff results)\n"
-        "- Try 2023 (complete season data)\n"
-        "- Avoid 2025 (future season, no actual results)"
+        "**🎯 Best Years for Learning:**\n"
+        "- **2024**: Most recent validation data\n"
+        "- **2023**: Complete season results\n"
+        "- **2022**: Historical comparison\n\n"
+        "**⚠️ Avoid 2025**: Future predictions only"
     )
 
-# Additional info
+    # Learning journey CTA
+    st.sidebar.subheader("🎓 Learning Path")
+    st.sidebar.markdown("""
+    **📊 Beginner**: Start with Performance Overview
+    **📈 Intermediate**: Explore ROC Curves
+    **🔬 Advanced**: Dive into Feature Importance
+    **🤝 Expert**: Analyze Model Disagreements
+    """)
+
+# Additional info and journey continuation
 st.markdown("---")
+st.subheader("🎓 Continue Your Data Science Journey")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+    ### 🎯 **What You've Learned**
+
+    ✅ **Model Accuracy**: How often predictions are correct
+
+    ✅ **ROC Curves**: Visual model performance comparison
+
+    ✅ **Feature Importance**: What stats matter most
+
+    ✅ **Model Agreement**: When algorithms agree/disagree
+
+    ### 🤔 **Think About This**
+    - Why might XGBoost and Logistic Regression disagree on certain teams?
+
+    - Which features surprise you as being important?
+
+    - How could we improve model accuracy further?
+    """)
+
+with col2:
+    st.markdown("""
+    ### 🚀 **Next Steps**
+
+    **🔮 Try Your Own Data**: Upload team stats and see predictions
+
+    **📈 Explore Visualizations**: See interactive charts and trends
+
+    **🏠 Return to Dashboard**: View current season predictions
+
+    ### 💡 **Pro Tips**
+
+    - Compare multiple years to see consistency
+
+    - Look for bubble teams where models disagree
+
+    - Use ensemble predictions for most reliable results
+    """)
+
 st.info(
-    "📊 This analysis compares XGBoost and Logistic Regression models side by side. "
-    "Use the sidebar to select different years for analysis."
-)
-st.info(
-    "🔍 **Key Insights**: Look for areas where models disagree - these often represent "
-    "the most interesting edge cases or areas where additional features might help."
+    "🔬 **Data Science Insight**: Model disagreement isn't bad - it often highlights the most interesting "
+    "and uncertain cases where human expertise and statistical analysis both provide value!"
 )

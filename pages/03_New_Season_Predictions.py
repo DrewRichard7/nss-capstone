@@ -19,10 +19,22 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🔮 New Season Predictions & Data Upload")
+st.title("🔮 Interactive Prediction Laboratory")
 st.markdown(
-    "### Upload new data to generate playoff predictions with multiple models"
+    "### Upload your own data and watch machine learning models make predictions in real-time"
 )
+
+# Journey introduction
+st.markdown("""
+🧪 **Welcome to the Prediction Lab!** This is where you become the data scientist. Upload team statistics
+and watch as our trained models analyze the data and make playoff predictions before your eyes.
+
+💡 **What you'll experience:**
+- Upload real or hypothetical team data
+- See how different ML algorithms interpret the same statistics
+- Compare XGBoost vs Logistic Regression vs Ensemble predictions
+- Download results and understand model confidence levels
+""")
 
 
 # ======== CACHED RESOURCE: load both models ========
@@ -40,6 +52,7 @@ def load_models():
 
 # ======== MLB Division and Wild Card Logic ========
 MLB_DIVISIONS = {
+    # Current team names
     "Baltimore Orioles": "American League East",
     "Boston Red Sox": "American League East",
     "New York Yankees": "American League East",
@@ -70,6 +83,17 @@ MLB_DIVISIONS = {
     "Los Angeles Dodgers": "National League West",
     "San Diego Padres": "National League West",
     "San Francisco Giants": "National League West",
+    # Historical team names for backward compatibility
+    "Cleveland Indians": "American League Central",
+    "Tampa Bay Devil Rays": "American League East",
+    "Florida Marlins": "National League East",
+    "Montreal Expos": "National League East",
+    "California Angels": "American League West",
+    "Anaheim Angels": "American League West",
+    "Los Angeles Angels of Anaheim": "American League West",
+    "St Louis Cardinals": "National League Central",  # No period version
+    "Arizona DiamondbacksDiamondbacks": "National League West",  # Duplicate issue
+    "Montreal ExposExpos": "National League East",  # Duplicate issue
 }
 
 
@@ -80,13 +104,54 @@ def enforce_mlb_playoff_rules(probabilities, leagues, team_names):
     # Clean team names to handle Unicode characters and duplicates
     cleaned_team_names = []
     for team in team_names:
-        cleaned = team.strip()
-        # Handle specific team name cases
-        if "Athletics" in cleaned and cleaned != "Oakland Athletics":
+        # Remove Unicode characters and normalize
+        import re
+
+        cleaned = re.sub(r"[^\w\s]", "", str(team)).strip()
+
+        # Remove duplicate words first (fix DiamondbacksDiamondbacks issue)
+        words = cleaned.split()
+        cleaned = " ".join(dict.fromkeys(words))
+
+        # Check for specific duplicate patterns and fix them
+        if (
+            "DiamondbacksDiamondbacks" in str(team)
+            or cleaned.count("Diamondbacks") > 1
+        ):
+            cleaned = "Arizona Diamondbacks"
+        elif "ExposExpos" in str(team) or cleaned.count("Expos") > 1:
+            cleaned = "Montreal Expos"
+        elif "IndiansIndians" in str(team) or cleaned.count("Indians") > 1:
+            cleaned = "Cleveland Guardians"
+
+        # Handle specific team name cases and duplications
+        elif "Athletics" in cleaned and "Athletics" not in [
+            "Oakland Athletics"
+        ]:
             cleaned = "Oakland Athletics"
         elif "Guardians" in cleaned and cleaned != "Cleveland Guardians":
             cleaned = "Cleveland Guardians"
-        # Add other team name normalizations as needed
+        elif "Indians" in cleaned or "Cleveland" in cleaned:
+            cleaned = "Cleveland Guardians"  # Updated to current team name
+        elif "St Louis Cardinals" in cleaned:
+            cleaned = "St. Louis Cardinals"
+        elif "Cardinals" in cleaned and "St" in cleaned:
+            cleaned = "St. Louis Cardinals"
+        elif "Angels" in cleaned and (
+            "Los Angeles" in cleaned
+            or "Anaheim" in cleaned
+            or "California" in cleaned
+        ):
+            cleaned = "Los Angeles Angels"
+        elif "Devil Rays" in cleaned or (
+            "Tampa Bay" in cleaned and "Rays" in cleaned
+        ):
+            cleaned = "Tampa Bay Rays"
+        elif "Marlins" in cleaned and (
+            "Florida" in cleaned or "Miami" in cleaned
+        ):
+            cleaned = "Miami Marlins"
+
         cleaned_team_names.append(cleaned)
 
     df = pd.DataFrame(
@@ -210,8 +275,41 @@ prediction_model = st.sidebar.selectbox(
 
 show_comparison = st.sidebar.checkbox("Show model comparison", value=True)
 
+# ======== Sidebar Configuration ========
+st.sidebar.subheader("🎛️ Prediction Settings")
+
+# Enhanced model selection with descriptions
+st.sidebar.subheader("🤖 Model Selection")
+prediction_model = st.sidebar.selectbox(
+    "Choose your prediction algorithm:",
+    ["XGBoost", "Logistic Regression", "Ensemble (Average)"],
+    index=2,  # Default to ensemble
+    help="Each model has different strengths - Ensemble combines the best of both!",
+)
+
+# Model info in sidebar
+model_descriptions = {
+    "XGBoost": "🌳 **Gradient Boosting**: Uses decision trees, great for complex patterns",
+    "Logistic Regression": "📈 **Linear Model**: Simple, interpretable, fast predictions",
+    "Ensemble (Average)": "🤝 **Best of Both**: Combines XGBoost + Logistic for robust results",
+}
+st.sidebar.info(model_descriptions[prediction_model])
+
+show_comparison = st.sidebar.checkbox(
+    "Show detailed model comparison", value=True
+)
+show_confidence = st.sidebar.checkbox(
+    "Show prediction confidence levels", value=True
+)
+
 # ======== Main Content ========
 st.header("📊 Upload Your Data")
+
+# Learning callout
+st.markdown("""
+📚 **Learning Moment**: Machine learning models need data in a specific format. The better and more complete
+your data, the more confident and accurate the predictions will be!
+""")
 
 # Sample data format
 with st.expander("📋 Expected Data Format"):
@@ -283,6 +381,15 @@ if uploaded_file is not None:
 
         # ======== Results Display ========
         st.header(f"🏆 Playoff Predictions ({prediction_model})")
+
+        # Success and learning callout
+        st.success(
+            "✅ **Prediction Complete!** Your data has been processed by our trained models."
+        )
+        st.markdown("""
+        🎯 **What just happened?** Our algorithms analyzed your team statistics and calculated the probability
+        each team makes the playoffs, then applied real MLB rules (3 division winners + 3 wild cards per league).
+        """)
 
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -385,6 +492,12 @@ if uploaded_file is not None:
         if show_comparison:
             st.header("🔍 Model Comparison Analysis")
 
+            # Learning moment
+            st.markdown("""
+            🧠 **Data Science Insight**: Different algorithms can interpret the same data differently.
+            Comparing models helps us understand prediction confidence and find potential edge cases!
+            """)
+
             # Create comparison dataframe
             comparison_df = create_prediction_comparison_df(
                 team_info, predictions, y
@@ -406,6 +519,19 @@ if uploaded_file is not None:
 
             # Detailed comparison table
             st.subheader("📊 Team-by-Team Model Comparison")
+
+            # Interactive learning
+            st.markdown("""
+            💡 **Look for**: Teams where models disagree significantly - these are the most uncertain predictions!
+            """)
+
+            if show_confidence:
+                st.markdown("""
+                **🎯 Confidence Guide:**
+                - **High Agreement + High Probabilities**: Very confident playoff prediction
+                - **High Agreement + Low Probabilities**: Very confident non-playoff prediction
+                - **Low Agreement**: Uncertain - could go either way!
+                """)
 
             display_comparison = comparison_df.copy()
             display_comparison["league_name"] = display_comparison[
@@ -496,6 +622,11 @@ if uploaded_file is not None:
 else:
     # ======== Sample Data Generation ========
     st.header("🎲 Try with Sample Data")
+
+    st.markdown("""
+    🎮 **No data to upload?** No problem! Generate realistic sample data to see how the models work.
+    This is perfect for learning and experimentation!
+    """)
 
     if st.button("Generate Sample Predictions"):
         st.info("Generating sample data for demonstration...")
@@ -605,6 +736,12 @@ else:
 
         st.subheader("🏆 Sample Playoff Predictions (Ensemble Model)")
 
+        # Learning moment for sample data
+        st.markdown("""
+        🎲 **What you're seeing**: These predictions are based on randomly generated (but realistic) team statistics.
+        Notice how the models still follow MLB playoff rules and create reasonable-looking standings!
+        """)
+
         # Show playoff teams
         playoff_teams_sample = rankings_sample[
             rankings_sample["makes_playoffs_constrained"]
@@ -632,18 +769,46 @@ else:
                     f"- {team['team']} ({team['playoff_type']}) - {team['probability']:.1%}"
                 )
 
-# ======== Instructions ========
+# ======== Learning Journey Continuation ========
 st.markdown("---")
-st.info("""
-📋 **Instructions:**
-1. Upload a CSV file with team statistics in the expected format
-2. Select your preferred model from the sidebar
-3. View playoff predictions with MLB division and wild card rules enforced
-4. Compare results across different models
-5. Download the results for further analysis
+st.subheader("🎓 What You've Accomplished")
 
-🎯 **Model Options:**
-- **XGBoost**: Gradient boosting model (generally higher accuracy)
-- **Logistic Regression**: Linear model (more interpretable)
-- **Ensemble**: Average of both models (combines strengths)
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+    ### ✅ **Skills Unlocked**
+    - **Data Upload**: Prepared data for ML models
+    - **Model Selection**: Chose between different algorithms
+    - **Result Interpretation**: Understood probability outputs
+    - **Model Comparison**: Analyzed algorithm differences
+
+    ### 🤔 **Reflection Questions**
+    - Which model gave the most realistic predictions?
+    - What surprised you about the results?
+    - How might you improve the data quality?
+    """)
+
+with col2:
+    st.markdown("""
+    ### 🚀 **Next Steps in Your Journey**
+    **📊 Model Analysis**: Deep dive into how these predictions were made
+    **📈 Visualizations**: See interactive charts and statistical trends
+    **🏠 Dashboard**: View live 2025 season predictions
+
+    ### 💡 **Pro Data Scientist Tips**
+    - Always validate your data before uploading
+    - Use ensemble methods for most reliable predictions
+    - Look for patterns in model disagreements
+    """)
+
+st.info("""
+🎯 **Quick Start Guide:**
+1. **Beginners**: Try the sample data first to see how models work
+2. **Upload your data**: Use the expected format for best results
+3. **Compare models**: See how XGBoost vs Logistic Regression perform
+4. **Analyze results**: Look for high-confidence vs uncertain predictions
+5. **Download & share**: Save your predictions for further analysis
+
+💡 **Remember**: Machine learning is about finding patterns in data - the better your data quality, the better your predictions!
 """)
