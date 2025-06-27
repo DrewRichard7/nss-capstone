@@ -548,7 +548,7 @@ if enforce_constraints and val_rankings is not None:
     )
 
 # ======== Feature Importances ========
-st.header("🎯 Feature Importances by Category")
+st.header("📌 Feature Importances by Category")
 imps = bst.get_score(importance_type="weight")
 imp_df = pd.DataFrame.from_dict(
     imps, orient="index", columns=["weight"]
@@ -571,7 +571,7 @@ with col1:
         st.write("No hitting features found")
 
 with col2:
-    st.subheader("🥎 Top Pitching Features")
+    st.subheader("⚾ Top Pitching Features")
     pitching_features = imp_df[imp_df.index.str.startswith("P_")].head(10)
     if not pitching_features.empty:
         pitching_display = pitching_features.reset_index()
@@ -586,7 +586,7 @@ with col2:
         st.write("No pitching features found")
 
 with col3:
-    st.subheader("🏆 Top Overall Features")
+    st.subheader("🏅 Top Overall Features")
     top_features = imp_df.head(10)
     if not top_features.empty:
         top_display = top_features.reset_index()
