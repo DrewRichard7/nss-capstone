@@ -2,18 +2,9 @@ import glob
 import os
 import pickle
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import seaborn as sns
 import streamlit as st
 import xgboost as xgb
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    roc_auc_score,
-    roc_curve,
-)
 
 # ======== Page config ========
 st.set_page_config(
@@ -22,7 +13,8 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("MLB Pre‐All‐Star Break Playoff Predictor Dashboard")
+st.title("🏆 Current Season League Rankings & Predictions")
+st.markdown("### Latest MLB Pre-All-Star Break Analysis")
 
 
 # ======== CACHED RESOURCE: load the XGBoost model ========
@@ -49,26 +41,26 @@ def get_available_years():
     data_files = glob.glob("data/mlb_team_stats_*_pre_all_star.csv")
     years = []
     for file in data_files:
-        # Extract year from filename
+        # Extract year from filename like "mlb_team_stats_2023_pre_all_star.csv"
         basename = os.path.basename(file)
-        year = basename.split("_")[3]  # mlb_team_stats_YEAR_pre_all_star.csv
-        try:
-            years.append(int(year))
-        except ValueError:
-            continue
-    return sorted(years)
+        parts = basename.split("_")
+        if len(parts) >= 4:
+            try:
+                year = int(parts[3])
+                years.append(year)
+            except ValueError:
+                continue
+    return sorted(years, reverse=True)
 
 
 # ======== Load raw data for a specific year ========
 @st.cache_data
 def load_raw_data(year):
     """Load raw data for a specific year"""
-    file_path = f"data/mlb_team_stats_{year}_pre_all_star.csv"
-    try:
-        df = pd.read_csv(file_path)
-        return df
-    except FileNotFoundError:
-        return None
+    filepath = f"data/mlb_team_stats_{year}_pre_all_star.csv"
+    if os.path.exists(filepath):
+        return pd.read_csv(filepath)
+    return None
 
 
 # ======== Preprocessing function ========
@@ -151,642 +143,194 @@ def enforce_playoff_constraints(probabilities, leagues, team_names):
     return df["makes_playoffs_constrained"].values, league_rankings
 
 
-# ======== Sidebar ========
-st.sidebar.header("Settings")
-threshold = st.sidebar.slider(
-    "Playoff Probability Threshold (Unconstrained)", 0.0, 1.0, 0.50
-)
-enforce_constraints = st.sidebar.checkbox(
-    "Enforce Playoff Constraints (6 AL + 6 NL)", value=True
-)
-uploaded_file = st.sidebar.file_uploader(
-    "Upload 2025 Pre‐All‐Star CSV", type="csv"
-)
+# ======== Main App Content ========
 
-st.sidebar.header("Visualization Options")
-show_confusion_matrix = st.sidebar.checkbox("Show Confusion Matrix")
-show_roc_curve = st.sidebar.checkbox("Show ROC Curve")
-
-st.sidebar.header("Data Explorer")
-available_years = get_available_years()
-selected_year = st.sidebar.selectbox(
-    "Select Year",
-    available_years,
-    index=len(available_years) - 1,  # Default to most recent year
-)
-show_raw_data = st.sidebar.checkbox("Show Raw Data")
-
-# ======== Load model & validation data ========
+# Load model and get latest year data
 bst = load_model()
-X_val, y_val, team_info_val = load_validation_data()
-dval = xgb.DMatrix(X_val, label=y_val)
-y_proba = bst.predict(dval)
+available_years = get_available_years()
+latest_year = available_years[0] if available_years else 2024
 
-# Apply constraints if enabled
-if enforce_constraints and team_info_val is not None:
-    y_pred_constrained, val_rankings = enforce_playoff_constraints(
-        y_proba, X_val["LEAGUE"].values, team_info_val["TEAM"].values
+# Load latest year data
+latest_data = load_raw_data(latest_year)
+
+if latest_data is not None:
+    # Preprocess data
+    X_latest, y_latest, team_info_latest = preprocess(latest_data)
+
+    # Make predictions
+    dlatest = xgb.DMatrix(X_latest, label=y_latest)
+    y_proba_latest = bst.predict(dlatest)
+
+    # Apply constraints
+    y_pred_constrained, latest_rankings = enforce_playoff_constraints(
+        y_proba_latest,
+        X_latest["LEAGUE"].values,
+        team_info_latest["TEAM"].values,
     )
-    y_pred = y_pred_constrained.astype(int)
-    # Add actual playoff results to val_rankings
-    val_rankings["actual_playoffs"] = y_val.values
-    # Calculate correctness for summary
-    val_rankings["correct"] = (
-        val_rankings["makes_playoffs_constrained"]
-        == val_rankings["actual_playoffs"]
-    )
-else:
-    y_pred = (y_proba > threshold).astype(int)
-    val_rankings = None
 
-# ======== Metrics ========
-accuracy = accuracy_score(y_val, y_pred)
-roc_auc = roc_auc_score(y_val, y_proba)
+    # Add actual playoff results if available
+    if y_latest is not None:
+        latest_rankings["actual_playoffs"] = y_latest.values
+        latest_rankings["correct"] = (
+            latest_rankings["makes_playoffs_constrained"]
+            == latest_rankings["actual_playoffs"]
+        )
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Model Accuracy", f"{accuracy:.2%}")
-col2.metric("ROC AUC", f"{roc_auc:.3f}")
+    # Display current season title
+    st.header(f"{latest_year} Season Playoff Predictions")
 
-if enforce_constraints:
-    # Show playoff distribution
-    predicted_playoffs = np.sum(y_pred)
-    col3.metric("Predicted Playoff Teams (Check)", f"{predicted_playoffs}/12")
-else:
-    predicted_playoffs = np.sum(y_pred)
-    col3.metric("Predicted Playoff Teams", f"{predicted_playoffs}")
-
-# ======== Conditional Visualizations ========
-if show_confusion_matrix or show_roc_curve:
-    col1, col2 = st.columns(2)
-
-    if show_confusion_matrix:
-        with col1:
-            st.subheader("Confusion Matrix")
-            cm = confusion_matrix(y_val, y_pred)
-            fig, ax = plt.subplots(figsize=(4, 3))
-            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-            ax.set_xlabel("Predicted")
-            ax.set_ylabel("Actual")
-            st.pyplot(fig)
-
-    if show_roc_curve:
-        with col2:
-            st.subheader("ROC Curve")
-            fpr, tpr, _ = roc_curve(y_val, y_proba)
-            fig2, ax2 = plt.subplots(figsize=(4, 3))
-            ax2.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
-            ax2.plot([0, 1], [0, 1], "--", color="gray")
-            ax2.set_xlabel("False Positive Rate")
-            ax2.set_ylabel("True Positive Rate")
-            ax2.legend(loc="lower right")
-            st.pyplot(fig2)
-
-# ======== Validation Results with Constraints ========
-if enforce_constraints and val_rankings is not None:
-    st.subheader("2024 Validation: League-Constrained Playoff Predictions")
-
+    # Show league standings
     col1, col2 = st.columns(2)
 
     with col1:
-        st.write("**American League**")
-        al_teams = val_rankings[val_rankings["league_name"] == "AL"].copy()
-        al_teams["predicted"] = al_teams["makes_playoffs_constrained"].apply(
-            lambda x: "✅ Yes" if x else "❌ No"
-        )
-        al_teams["actual"] = al_teams["actual_playoffs"].apply(
-            lambda x: "✅ Yes" if x else "❌ No"
-        )
-        al_teams["correct"] = (
-            al_teams["makes_playoffs_constrained"]
-            == al_teams["actual_playoffs"]
-        )
-        al_teams["result"] = al_teams["correct"].apply(
-            lambda x: "✅ Correct" if x else "❌ Wrong"
-        )
+        st.subheader("🇺🇸 American League")
+        al_teams = latest_rankings[
+            latest_rankings["league_name"] == "AL"
+        ].copy()
+
+        # Create display columns
+        al_teams["playoff_status"] = al_teams[
+            "makes_playoffs_constrained"
+        ].apply(lambda x: "✅ Playoffs" if x else "❌ Miss")
+
+        # If we have actual results, show correctness
+        display_cols = ["team", "probability", "league_rank", "playoff_status"]
+        column_names = {
+            "team": "Team",
+            "probability": "Playoff Prob",
+            "league_rank": "Rank",
+            "playoff_status": "Prediction",
+        }
+
+        if "actual_playoffs" in al_teams.columns:
+            al_teams["actual_status"] = al_teams["actual_playoffs"].apply(
+                lambda x: "✅ Made" if x else "❌ Missed"
+            )
+            al_teams["result"] = al_teams["correct"].apply(
+                lambda x: "✅ Correct" if x else "❌ Wrong"
+            )
+            display_cols.extend(["actual_status", "result"])
+            column_names.update({"actual_status": "Actual", "result": "Result"})
+
         st.dataframe(
-            al_teams[
-                [
-                    "team",
-                    "probability",
-                    "league_rank",
-                    "predicted",
-                    "actual",
-                    "result",
-                ]
-            ].rename(
-                columns={
-                    "team": "Team",
-                    "probability": "Playoff Prob",
-                    "league_rank": "Rank",
-                    "predicted": "Predicted",
-                    "actual": "Actual",
-                    "result": "Result",
-                }
-            ),
+            al_teams[display_cols].rename(columns=column_names),
             hide_index=True,
+            use_container_width=True,
         )
 
     with col2:
-        st.write("**National League**")
-        nl_teams = val_rankings[val_rankings["league_name"] == "NL"].copy()
-        nl_teams["predicted"] = nl_teams["makes_playoffs_constrained"].apply(
-            lambda x: "✅ Yes" if x else "❌ No"
-        )
-        nl_teams["actual"] = nl_teams["actual_playoffs"].apply(
-            lambda x: "✅ Yes" if x else "❌ No"
-        )
-        nl_teams["correct"] = (
-            nl_teams["makes_playoffs_constrained"]
-            == nl_teams["actual_playoffs"]
-        )
-        nl_teams["result"] = nl_teams["correct"].apply(
-            lambda x: "✅ Correct" if x else "❌ Wrong"
-        )
+        st.subheader("🇺🇸 National League")
+        nl_teams = latest_rankings[
+            latest_rankings["league_name"] == "NL"
+        ].copy()
+
+        # Create display columns
+        nl_teams["playoff_status"] = nl_teams[
+            "makes_playoffs_constrained"
+        ].apply(lambda x: "✅ Playoffs" if x else "❌ Miss")
+
+        # If we have actual results, show correctness
+        display_cols = ["team", "probability", "league_rank", "playoff_status"]
+        column_names = {
+            "team": "Team",
+            "probability": "Playoff Prob",
+            "league_rank": "Rank",
+            "playoff_status": "Prediction",
+        }
+
+        if "actual_playoffs" in nl_teams.columns:
+            nl_teams["actual_status"] = nl_teams["actual_playoffs"].apply(
+                lambda x: "✅ Made" if x else "❌ Missed"
+            )
+            nl_teams["result"] = nl_teams["correct"].apply(
+                lambda x: "✅ Correct" if x else "❌ Wrong"
+            )
+            display_cols.extend(["actual_status", "result"])
+            column_names.update({"actual_status": "Actual", "result": "Result"})
+
         st.dataframe(
-            nl_teams[
-                [
-                    "team",
-                    "probability",
-                    "league_rank",
-                    "predicted",
-                    "actual",
-                    "result",
-                ]
-            ].rename(
-                columns={
-                    "team": "Team",
-                    "probability": "Playoff Prob",
-                    "league_rank": "Rank",
-                    "predicted": "Predicted",
-                    "actual": "Actual",
-                    "result": "Result",
-                }
-            ),
+            nl_teams[display_cols].rename(columns=column_names),
             hide_index=True,
+            use_container_width=True,
         )
 
-    # Show prediction accuracy summary
-    st.subheader("2024 Playoff Prediction Summary")
+    # Show prediction summary if we have actual results
+    if "actual_playoffs" in latest_rankings.columns:
+        st.subheader(f"{latest_year} Playoff Prediction Summary")
 
-    # Calculate overall accuracy
-    total_teams = len(val_rankings)
-    correct_predictions = val_rankings["correct"].sum()
-    accuracy_pct = (correct_predictions / total_teams) * 100
+        # Calculate overall accuracy
+        total_teams = len(latest_rankings)
+        correct_predictions = latest_rankings["correct"].sum()
+        accuracy_pct = (correct_predictions / total_teams) * 100
 
-    # Calculate league-specific accuracy
-    al_correct = val_rankings[val_rankings["league_name"] == "AL"][
-        "correct"
-    ].sum()
-    al_total = len(val_rankings[val_rankings["league_name"] == "AL"])
-    al_accuracy = (al_correct / al_total) * 100
+        # Calculate league-specific accuracy
+        al_correct = al_teams["correct"].sum()
+        al_total = len(al_teams)
+        al_accuracy = (al_correct / al_total) * 100
 
-    nl_correct = val_rankings[val_rankings["league_name"] == "NL"][
-        "correct"
-    ].sum()
-    nl_total = len(val_rankings[val_rankings["league_name"] == "NL"])
-    nl_accuracy = (nl_correct / nl_total) * 100
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric(
-        "Overall Accuracy",
-        f"{accuracy_pct:.1f}%",
-        f"{correct_predictions}/{total_teams}",
-    )
-    col2.metric(
-        "AL Accuracy", f"{al_accuracy:.1f}%", f"{al_correct}/{al_total}"
-    )
-    col3.metric(
-        "NL Accuracy", f"{nl_accuracy:.1f}%", f"{nl_correct}/{nl_total}"
-    )
-
-# ======== Feature Importances ========
-st.subheader("Feature Importances by Category")
-imps = bst.get_score(importance_type="weight")
-imp_df = pd.DataFrame.from_dict(
-    imps, orient="index", columns=["weight"]
-).sort_values("weight", ascending=False)
-
-# Create three columns for the tables
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.write("**Top Hitting Features**")
-    hitting_features = imp_df[imp_df.index.str.startswith("H_")].head(5)
-    if not hitting_features.empty:
-        hitting_display = hitting_features.reset_index()
-        hitting_display.columns = ["Feature", "Importance"]
-        hitting_display["Feature"] = hitting_display["Feature"].str.replace(
-            "H_", ""
-        )
-        st.dataframe(hitting_display, hide_index=True)
-    else:
-        st.write("No hitting features found")
-
-with col2:
-    st.write("**Top Pitching Features**")
-    pitching_features = imp_df[imp_df.index.str.startswith("P_")].head(5)
-    if not pitching_features.empty:
-        pitching_display = pitching_features.reset_index()
-        pitching_display.columns = ["Feature", "Importance"]
-        pitching_display["Feature"] = pitching_display["Feature"].str.replace(
-            "P_", ""
-        )
-        st.dataframe(pitching_display, hide_index=True)
-    else:
-        st.write("No pitching features found")
-
-with col3:
-    st.write("**Top Overall Features**")
-    top_features = imp_df.head(5)
-    if not top_features.empty:
-        top_display = top_features.reset_index()
-        top_display.columns = ["Feature", "Importance"]
-        st.dataframe(top_display, hide_index=True)
-    else:
-        st.write("No features found")
-
-
-# ======== Test playoff constraints with sample data ========
-def create_sample_data():
-    """Create sample data for testing playoff constraints"""
-    np.random.seed(42)
-
-    # Create 30 teams (15 AL, 15 NL)
-    al_teams = [f"AL Team {i}" for i in range(1, 16)]
-    nl_teams = [f"NL Team {i}" for i in range(1, 16)]
-
-    teams = al_teams + nl_teams
-    leagues = [0] * 15 + [1] * 15  # 0 = AL, 1 = NL
-
-    # Generate random probabilities (higher for some teams to simulate reality)
-    probabilities = np.random.beta(
-        2, 5, 30
-    )  # Beta distribution for realistic probabilities
-
-    return teams, leagues, probabilities
-
-
-if st.sidebar.button("Test with Sample Data"):
-    st.header("Sample Data Test: Playoff Constraint Enforcement")
-
-    sample_teams, sample_leagues, sample_probs = create_sample_data()
-
-    # Show unconstrained vs constrained
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Unconstrained (Threshold-based)")
-        unconstrained_preds = sample_probs > threshold
-        unconstrained_count = np.sum(unconstrained_preds)
-
-        sample_df = pd.DataFrame(
-            {
-                "Team": sample_teams,
-                "League": ["AL" if l == 0 else "NL" for l in sample_leagues],
-                "Probability": sample_probs,
-                "Makes_Playoffs": unconstrained_preds,
-            }
-        ).sort_values("Probability", ascending=False)
-
-        st.write(f"**Total Playoff Teams: {unconstrained_count}**")
-        st.dataframe(sample_df, hide_index=True)
-
-    with col2:
-        st.subheader("Constrained (6 AL + 6 NL)")
-        constrained_preds, rankings = enforce_playoff_constraints(
-            sample_probs, sample_leagues, sample_teams
-        )
-
-        constrained_count = np.sum(constrained_preds)
-        st.write(f"**Total Playoff Teams: {constrained_count}**")
-
-        # Show AL teams
-        st.write("**American League**")
-        al_rankings = rankings[rankings["league_name"] == "AL"].head(8)
-        al_rankings["Status"] = al_rankings["makes_playoffs_constrained"].apply(
-            lambda x: "✅ Playoffs" if x else "❌ Miss"
-        )
-        st.dataframe(
-            al_rankings[
-                ["team", "probability", "league_rank", "Status"]
-            ].rename(
-                columns={
-                    "team": "Team",
-                    "probability": "Prob",
-                    "league_rank": "Rank",
-                }
-            ),
-            hide_index=True,
-        )
-
-        # Show NL teams
-        st.write("**National League**")
-        nl_rankings = rankings[rankings["league_name"] == "NL"].head(8)
-        nl_rankings["Status"] = nl_rankings["makes_playoffs_constrained"].apply(
-            lambda x: "✅ Playoffs" if x else "❌ Miss"
-        )
-        st.dataframe(
-            nl_rankings[
-                ["team", "probability", "league_rank", "Status"]
-            ].rename(
-                columns={
-                    "team": "Team",
-                    "probability": "Prob",
-                    "league_rank": "Rank",
-                }
-            ),
-            hide_index=True,
-        )
-
-# ======== New‐Season Predictions ========
-if uploaded_file:
-    st.header("2025 Playoff Predictions")
-    df_new = pd.read_csv(uploaded_file)
-    X_new, _, team_info_new = preprocess(df_new)
-    dnew = xgb.DMatrix(X_new)
-    p_new = bst.predict(dnew)
-
-    if enforce_constraints and team_info_new is not None:
-        # Apply playoff constraints
-        constrained_preds, new_rankings = enforce_playoff_constraints(
-            p_new, X_new["LEAGUE"].values, team_info_new["TEAM"].values
-        )
-
-        st.subheader("Constrained Playoff Predictions (6 AL + 6 NL)")
-
-        # Summary metrics
-        al_cutoff = new_rankings[
-            (new_rankings["league_name"] == "AL")
-            & (new_rankings["league_rank"] == 6)
-        ]["probability"].iloc[0]
-        nl_cutoff = new_rankings[
-            (new_rankings["league_name"] == "NL")
-            & (new_rankings["league_rank"] == 6)
-        ]["probability"].iloc[0]
+        nl_correct = nl_teams["correct"].sum()
+        nl_total = len(nl_teams)
+        nl_accuracy = (nl_correct / nl_total) * 100
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("AL Cutoff Probability", f"{al_cutoff:.3f}")
-        col2.metric("NL Cutoff Probability", f"{nl_cutoff:.3f}")
-        col3.metric("Total Playoff Teams", "12/12")
+        col1.metric(
+            "Overall Accuracy",
+            f"{accuracy_pct:.1f}%",
+            f"{correct_predictions}/{total_teams}",
+        )
+        col2.metric(
+            "AL Accuracy", f"{al_accuracy:.1f}%", f"{al_correct}/{al_total}"
+        )
+        col3.metric(
+            "NL Accuracy", f"{nl_accuracy:.1f}%", f"{nl_correct}/{nl_total}"
+        )
 
-        col1, col2 = st.columns(2)
+    # Show key insights
+    st.subheader("📊 Key Insights")
 
-        with col1:
-            st.write("**American League**")
-            al_predictions = new_rankings[
-                new_rankings["league_name"] == "AL"
-            ].copy()
-            al_predictions["status"] = al_predictions[
-                "makes_playoffs_constrained"
-            ].apply(lambda x: "✅ Playoffs" if x else "❌ Miss")
+    # Playoff probabilities
+    avg_playoff_prob = latest_rankings[
+        latest_rankings["makes_playoffs_constrained"]
+    ]["probability"].mean()
+    min_playoff_prob = latest_rankings[
+        latest_rankings["makes_playoffs_constrained"]
+    ]["probability"].min()
+    max_playoff_prob = latest_rankings[
+        latest_rankings["makes_playoffs_constrained"]
+    ]["probability"].max()
 
-            # Highlight the cutoff line
-            al_display = al_predictions[
-                ["team", "probability", "league_rank", "status"]
-            ].rename(
-                columns={
-                    "team": "Team",
-                    "probability": "Playoff Prob",
-                    "league_rank": "Rank",
-                }
-            )
-            st.dataframe(al_display, hide_index=True)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Avg Playoff Team Prob", f"{avg_playoff_prob:.1%}")
+    col2.metric("Lowest Playoff Prob", f"{min_playoff_prob:.1%}")
+    col3.metric("Highest Playoff Prob", f"{max_playoff_prob:.1%}")
 
-        with col2:
-            st.write("**National League**")
-            nl_predictions = new_rankings[
-                new_rankings["league_name"] == "NL"
-            ].copy()
-            nl_predictions["status"] = nl_predictions[
-                "makes_playoffs_constrained"
-            ].apply(lambda x: "✅ Playoffs" if x else "❌ Miss")
+    # Bubble teams (teams just above/below cutoff)
+    st.subheader("🎯 Bubble Teams")
+    st.write("Teams on the playoff bubble (ranks 5-8 in each league):")
 
-            nl_display = nl_predictions[
-                ["team", "probability", "league_rank", "status"]
-            ].rename(
-                columns={
-                    "team": "Team",
-                    "probability": "Playoff Prob",
-                    "league_rank": "Rank",
-                }
-            )
-            st.dataframe(nl_display, hide_index=True)
+    bubble_teams = latest_rankings[
+        (latest_rankings["league_rank"] >= 5)
+        & (latest_rankings["league_rank"] <= 8)
+    ].sort_values(["league_name", "league_rank"])
 
-        # Show bubble teams
-        st.subheader("Bubble Teams Analysis")
-        bubble_teams = new_rankings[
-            new_rankings["league_rank"].isin([7, 8])
-        ].copy()
-        if not bubble_teams.empty:
-            bubble_teams["gap_to_playoffs"] = bubble_teams.apply(
-                lambda row: new_rankings[
-                    (new_rankings["league_name"] == row["league_name"])
-                    & (new_rankings["league_rank"] == 6)
-                ]["probability"].iloc[0]
-                - row["probability"],
-                axis=1,
-            )
-
-            st.write("Teams just missing the playoffs:")
-            st.dataframe(
-                bubble_teams[
-                    [
-                        "team",
-                        "league_name",
-                        "probability",
-                        "league_rank",
-                        "gap_to_playoffs",
-                    ]
-                ].rename(
-                    columns={
-                        "team": "Team",
-                        "league_name": "League",
-                        "probability": "Playoff Prob",
-                        "league_rank": "League Rank",
-                        "gap_to_playoffs": "Gap to Playoffs",
-                    }
-                ),
-                hide_index=True,
-            )
-
-        # Comparison with unconstrained
-        if st.checkbox("Show Comparison with Unconstrained Predictions"):
-            st.subheader("Constrained vs Unconstrained Comparison")
-
-            unconstrained_preds = (p_new > threshold).astype(int)
-            comparison_df = team_info_new.copy()
-            comparison_df["Probability"] = p_new
-            comparison_df["Unconstrained"] = unconstrained_preds
-            comparison_df["Constrained"] = constrained_preds.astype(int)
-            comparison_df["Difference"] = (
-                comparison_df["Constrained"] - comparison_df["Unconstrained"]
-            )
-
-            # Show teams where predictions differ
-            different_preds = comparison_df[comparison_df["Difference"] != 0]
-            if not different_preds.empty:
-                st.write("Teams with different predictions:")
-                different_preds["Change"] = different_preds["Difference"].apply(
-                    lambda x: "Added to Playoffs"
-                    if x > 0
-                    else "Removed from Playoffs"
+    for league in ["AL", "NL"]:
+        league_bubble = bubble_teams[bubble_teams["league_name"] == league]
+        if not league_bubble.empty:
+            st.write(f"**{league}:**")
+            for _, team in league_bubble.iterrows():
+                status = (
+                    "✅ In" if team["makes_playoffs_constrained"] else "❌ Out"
                 )
-                st.dataframe(
-                    different_preds[["TEAM", "LEAGUE", "Probability", "Change"]]
-                    .rename(columns={"TEAM": "Team", "LEAGUE": "League"})
-                    .sort_values("Probability", ascending=False),
-                    hide_index=True,
-                )
-            else:
-                st.info(
-                    "No differences between constrained and unconstrained predictions at this threshold."
+                st.write(
+                    f"  {team['league_rank']:.0f}. {team['team']} ({team['probability']:.1%}) - {status}"
                 )
 
-    else:
-        # Unconstrained predictions
-        df_display = team_info_new.copy()
-        df_display["Playoff_Prob"] = p_new
-        df_display["Will_Make_Playoff"] = p_new > threshold
+else:
+    st.error(f"No data available for {latest_year}")
+    st.write("Available years:", available_years)
 
-        total_predicted = np.sum(p_new > threshold)
-        st.subheader(
-            f"Unconstrained Predictions ({total_predicted} teams predicted)"
-        )
-        st.dataframe(
-            df_display[["TEAM", "LEAGUE", "Playoff_Prob", "Will_Make_Playoff"]]
-            .sort_values("Playoff_Prob", ascending=False)
-            .reset_index(drop=True)
-            .rename(columns={"TEAM": "Team", "LEAGUE": "League"})
-        )
-
-
-# ======== Raw Data Display ========
-if show_raw_data:
-    st.header(f"{selected_year} MLB Pre-All-Star Break Team Statistics")
-
-    raw_data = load_raw_data(selected_year)
-    if raw_data is not None:
-        # Display summary stats
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Teams", len(raw_data))
-        col2.metric("AL Teams", len(raw_data[raw_data["LEAGUE"] == "AL"]))
-        col3.metric("NL Teams", len(raw_data[raw_data["LEAGUE"] == "NL"]))
-
-        if "MADE_PLAYOFFS" in raw_data.columns:
-            playoff_teams = raw_data["MADE_PLAYOFFS"].sum()
-            col4.metric("Playoff Teams", playoff_teams)
-        else:
-            col4.metric("Playoff Teams", "N/A")
-
-        # Filter options
-        st.subheader("Filter Options")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            league_filter = st.selectbox(
-                "Filter by League",
-                ["All", "AL", "NL"],
-                key=f"league_filter_{selected_year}",
-            )
-
-        with col2:
-            if "MADE_PLAYOFFS" in raw_data.columns:
-                playoff_filter = st.selectbox(
-                    "Filter by Playoff Status",
-                    ["All", "Made Playoffs", "Missed Playoffs"],
-                    key=f"playoff_filter_{selected_year}",
-                )
-            else:
-                playoff_filter = "All"
-
-        # Apply filters
-        filtered_data = raw_data.copy()
-
-        if league_filter != "All":
-            filtered_data = filtered_data[
-                filtered_data["LEAGUE"] == league_filter
-            ]
-
-        if playoff_filter != "All" and "MADE_PLAYOFFS" in raw_data.columns:
-            if playoff_filter == "Made Playoffs":
-                filtered_data = filtered_data[
-                    filtered_data["MADE_PLAYOFFS"] == True
-                ]
-            else:
-                filtered_data = filtered_data[
-                    filtered_data["MADE_PLAYOFFS"] == False
-                ]
-
-        # Column selection
-        st.subheader("Column Selection")
-        col_categories = st.multiselect(
-            "Show Categories",
-            ["Basic Info", "Hitting Stats", "Pitching Stats", "Results"],
-            default=["Basic Info", "Results"],
-            key=f"col_categories_{selected_year}",
-        )
-
-        # Define column groups
-        basic_cols = ["TEAM", "LEAGUE"]
-        hitting_cols = [col for col in raw_data.columns if col.startswith("H_")]
-        pitching_cols = [
-            col for col in raw_data.columns if col.startswith("P_")
-        ]
-        result_cols = []
-        if "MADE_PLAYOFFS" in raw_data.columns:
-            result_cols.append("MADE_PLAYOFFS")
-        if "WON_WORLD_SERIES" in raw_data.columns:
-            result_cols.append("WON_WORLD_SERIES")
-
-        # Build display columns
-        display_cols = []
-        if "Basic Info" in col_categories:
-            display_cols.extend(basic_cols)
-        if "Hitting Stats" in col_categories:
-            display_cols.extend(hitting_cols)
-        if "Pitching Stats" in col_categories:
-            display_cols.extend(pitching_cols)
-        if "Results" in col_categories:
-            display_cols.extend(result_cols)
-
-        # Display the filtered data
-        st.subheader(f"Data ({len(filtered_data)} teams)")
-        if display_cols:
-            st.dataframe(
-                filtered_data[display_cols].sort_values("TEAM"),
-                hide_index=True,
-                use_container_width=True,
-            )
-        else:
-            st.info("Please select at least one category to display data.")
-
-        # Download option
-        csv = filtered_data.to_csv(index=False)
-        st.download_button(
-            label=f"Download {selected_year} Data as CSV",
-            data=csv,
-            file_name=f"mlb_stats_{selected_year}_filtered.csv",
-            mime="text/csv",
-        )
-
-    else:
-        st.error(
-            f"Could not load data for {selected_year}. File may not exist."
-        )
-
-# ======== DATA SOURCE CITATION ========
+# Navigation info
 st.markdown("---")
-st.markdown(
-    """
-    ### Data Source
-    **Primary Data Source**: [MLB.com Team Statistics](https://www.mlb.com/stats/team)
-    - Historical team batting and pitching statistics (1990-2025)
-    - Playoff results and World Series winners
-    - Data collected via web scraping with proper rate limiting
-
-    **Citation**: Major League Baseball. (n.d.). *Team Stats*. MLB.com. https://www.mlb.com/stats/team
-
-    ---
-    **Author**: Andrew Richard | **Program**: NSS Data Science Cohort 8
-    """
+st.info(
+    "📍 Navigate to other pages using the sidebar to explore model analysis, visualizations, and upload new data for predictions."
 )
