@@ -110,33 +110,241 @@ def preprocess(df):
         return df, None, team_info
 
 
-def enforce_playoff_constraints(probabilities, leagues, team_names):
+# ======== MLB Division and Wild Card Logic ========
+MLB_DIVISIONS = {
+    "Baltimore Orioles": "American League East",
+    "Boston Red Sox": "American League East",
+    "New York Yankees": "American League East",
+    "Tampa Bay Rays": "American League East",
+    "Toronto Blue Jays": "American League East",
+    "Chicago White Sox": "American League Central",
+    "Cleveland Guardians": "American League Central",
+    "Detroit Tigers": "American League Central",
+    "Kansas City Royals": "American League Central",
+    "Minnesota Twins": "American League Central",
+    "Houston Astros": "American League West",
+    "Los Angeles Angels": "American League West",
+    "Oakland Athletics": "American League West",
+    "Seattle Mariners": "American League West",
+    "Texas Rangers": "American League West",
+    "Atlanta Braves": "National League East",
+    "Miami Marlins": "National League East",
+    "New York Mets": "National League East",
+    "Philadelphia Phillies": "National League East",
+    "Washington Nationals": "National League East",
+    "Chicago Cubs": "National League Central",
+    "Cincinnati Reds": "National League Central",
+    "Milwaukee Brewers": "National League Central",
+    "Pittsburgh Pirates": "National League Central",
+    "St. Louis Cardinals": "National League Central",
+    "Arizona Diamondbacks": "National League West",
+    "Colorado Rockies": "National League West",
+    "Los Angeles Dodgers": "National League West",
+    "San Diego Padres": "National League West",
+    "San Francisco Giants": "National League West",
+}
+
+
+def enforce_mlb_playoff_rules(probabilities, leagues, team_names):
     """
-    Enforce exactly 6 teams from AL and 6 teams from NL make playoffs.
+    Enforce MLB playoff rules: 3 division winners + 3 wild cards per league.
+
+    Args:
+        probabilities: Array of playoff probabilities
+        leagues: Array of league indicators (0=AL, 1=NL)
+        team_names: Array of team names
+
+    Returns:
+        constrained_predictions: Binary array of playoff predictions
+        league_rankings: DataFrame with detailed rankings including division info
     """
+    # Clean team names to handle Unicode characters and duplicates
+    cleaned_team_names = []
+    for team in team_names:
+        # Remove invisible Unicode characters and normalize
+        cleaned = team.strip()
+        # Handle specific cases
+        if "Athletics" in cleaned and cleaned != "Oakland Athletics":
+            cleaned = "Oakland Athletics"
+        elif "Guardians" in cleaned and cleaned != "Cleveland Guardians":
+            cleaned = "Cleveland Guardians"
+        elif "Rays" in cleaned and cleaned != "Tampa Bay Rays":
+            cleaned = "Tampa Bay Rays"
+        elif "Marlins" in cleaned and cleaned != "Miami Marlins":
+            cleaned = "Miami Marlins"
+        elif "Nationals" in cleaned and cleaned != "Washington Nationals":
+            cleaned = "Washington Nationals"
+        elif "Rangers" in cleaned and cleaned != "Texas Rangers":
+            cleaned = "Texas Rangers"
+        elif "Angels" in cleaned and cleaned != "Los Angeles Angels":
+            cleaned = "Los Angeles Angels"
+        elif "Dodgers" in cleaned and cleaned != "Los Angeles Dodgers":
+            cleaned = "Los Angeles Dodgers"
+        elif "Padres" in cleaned and cleaned != "San Diego Padres":
+            cleaned = "San Diego Padres"
+        elif "Giants" in cleaned and cleaned != "San Francisco Giants":
+            cleaned = "San Francisco Giants"
+        elif "Rockies" in cleaned and cleaned != "Colorado Rockies":
+            cleaned = "Colorado Rockies"
+        elif "Diamondbacks" in cleaned and cleaned != "Arizona Diamondbacks":
+            cleaned = "Arizona Diamondbacks"
+        elif "Cardinals" in cleaned and cleaned != "St. Louis Cardinals":
+            cleaned = "St. Louis Cardinals"
+        elif "Pirates" in cleaned and cleaned != "Pittsburgh Pirates":
+            cleaned = "Pittsburgh Pirates"
+        elif "Brewers" in cleaned and cleaned != "Milwaukee Brewers":
+            cleaned = "Milwaukee Brewers"
+        elif "Reds" in cleaned and cleaned != "Cincinnati Reds":
+            cleaned = "Cincinnati Reds"
+        elif "Cubs" in cleaned and cleaned != "Chicago Cubs":
+            cleaned = "Chicago Cubs"
+        elif "Mets" in cleaned and cleaned != "New York Mets":
+            cleaned = "New York Mets"
+        elif "Phillies" in cleaned and cleaned != "Philadelphia Phillies":
+            cleaned = "Philadelphia Phillies"
+        elif "Braves" in cleaned and cleaned != "Atlanta Braves":
+            cleaned = "Atlanta Braves"
+        elif "Twins" in cleaned and cleaned != "Minnesota Twins":
+            cleaned = "Minnesota Twins"
+        elif "Royals" in cleaned and cleaned != "Kansas City Royals":
+            cleaned = "Kansas City Royals"
+        elif "Tigers" in cleaned and cleaned != "Detroit Tigers":
+            cleaned = "Detroit Tigers"
+        elif "White Sox" in cleaned and cleaned != "Chicago White Sox":
+            cleaned = "Chicago White Sox"
+        elif "Yankees" in cleaned and cleaned != "New York Yankees":
+            cleaned = "New York Yankees"
+        elif "Red Sox" in cleaned and cleaned != "Boston Red Sox":
+            cleaned = "Boston Red Sox"
+        elif "Orioles" in cleaned and cleaned != "Baltimore Orioles":
+            cleaned = "Baltimore Orioles"
+        elif "Blue Jays" in cleaned and cleaned != "Toronto Blue Jays":
+            cleaned = "Toronto Blue Jays"
+        elif "Mariners" in cleaned and cleaned != "Seattle Mariners":
+            cleaned = "Seattle Mariners"
+        elif "Astros" in cleaned and cleaned != "Houston Astros":
+            cleaned = "Houston Astros"
+
+        cleaned_team_names.append(cleaned)
+
     df = pd.DataFrame(
         {
-            "team": team_names,
+            "team": cleaned_team_names,
             "probability": probabilities,
             "league": leagues,
             "league_name": ["AL" if l == 0 else "NL" for l in leagues],
         }
     )
 
-    # Rank teams within each league
-    df["league_rank"] = df.groupby("league")["probability"].rank(
+    # Add division information
+    df["division"] = df["team"].map(MLB_DIVISIONS)
+
+    # Handle teams not in our division mapping (fallback to league-based ranking)
+    missing_divisions = df[df["division"].isna()]
+    if not missing_divisions.empty:
+        st.warning(
+            f"WARNING: Some teams not found in division mapping: {missing_divisions['team'].to_list()}"
+        )
+        # For missing teams, assign to a default division based on league
+        for idx, row in missing_divisions.iterrows():
+            if row["league_name"] == "AL":
+                df.loc[idx, "division"] = (
+                    "American League East"  # Default fallback
+                )
+            else:
+                df.loc[idx, "division"] = (
+                    "National League East"  # Default fallback
+                )
+
+    # Extract division type (East, Central, West)
+    df["division_type"] = df["division"].str.extract(r"(East|Central|West)$")
+
+    playoff_teams = []
+
+    # Process each league separately
+    for league in ["AL", "NL"]:
+        league_df = df[df["league_name"] == league].copy()
+
+        if len(league_df) == 0:
+            continue
+
+        # 1. Determine division winners (top team in each division)
+        division_winners = []
+        division_winner_indices = []
+        for div_type in ["East", "Central", "West"]:
+            div_teams = league_df[league_df["division_type"] == div_type]
+            if len(div_teams) > 0:
+                # Get the team with highest probability in this division
+                winner_idx = div_teams["probability"].idxmax()
+                winner = league_df.loc[winner_idx]
+                division_winners.append(winner)
+                division_winner_indices.append(winner_idx)
+
+        # 2. Determine wild card teams (top 3 non-division winners)
+        non_winners = league_df[~league_df.index.isin(division_winner_indices)]
+
+        # Sort non-winners by probability and take top 3
+        wild_cards = non_winners.nlargest(3, "probability")
+
+        # Combine division winners and wild cards
+        league_playoff_teams = division_winners + wild_cards.to_dict("records")
+        playoff_teams.extend([team["team"] for team in league_playoff_teams])
+
+    # Create final predictions
+    df["makes_playoffs_constrained"] = df["team"].isin(playoff_teams)
+
+    # Add ranking information for display
+    df["league_rank"] = df.groupby("league_name")["probability"].rank(
         method="dense", ascending=False
     )
 
-    # Top 6 from each league make playoffs
-    df["makes_playoffs_constrained"] = df["league_rank"] <= 6
+    # Add division ranking
+    df["division_rank"] = df.groupby("division")["probability"].rank(
+        method="dense", ascending=False
+    )
+
+    # Add playoff type classification
+    df["playoff_type"] = "Miss"
+    for league in ["AL", "NL"]:
+        league_df = df[df["league_name"] == league].copy()
+
+        # Division winners
+        for div_type in ["East", "Central", "West"]:
+            div_teams = league_df[league_df["division_type"] == div_type]
+            if len(div_teams) > 0:
+                winner_idx = div_teams["probability"].idxmax()
+                if df.loc[winner_idx, "makes_playoffs_constrained"]:
+                    df.loc[winner_idx, "playoff_type"] = f"{div_type} Winner"
+
+        # Wild cards - get non-division winners again
+        division_winner_indices = []
+        for div_type in ["East", "Central", "West"]:
+            div_teams = league_df[league_df["division_type"] == div_type]
+            if len(div_teams) > 0:
+                winner_idx = div_teams["probability"].idxmax()
+                division_winner_indices.append(winner_idx)
+
+        non_winners = league_df[~league_df.index.isin(division_winner_indices)]
+        wild_cards = non_winners.nlargest(3, "probability")
+        for _, wild_card in wild_cards.iterrows():
+            if wild_card["makes_playoffs_constrained"]:
+                df.loc[wild_card.name, "playoff_type"] = "Wild Card"
 
     # Sort for display
     league_rankings = df.sort_values(
-        ["league_name", "league_rank"]
+        ["league_name", "division_type", "probability"],
+        ascending=[True, True, False],
     ).reset_index(drop=True)
 
     return df["makes_playoffs_constrained"].values, league_rankings
+
+
+def enforce_playoff_constraints(probabilities, leagues, team_names):
+    """
+    Enforce exactly 6 teams from AL and 6 teams from NL make playoffs.
+    Now uses proper MLB rules with divisions and wild cards.
+    """
+    return enforce_mlb_playoff_rules(probabilities, leagues, team_names)
 
 
 # ======== Sidebar Controls ========
@@ -145,7 +353,7 @@ threshold = st.sidebar.slider(
     "Playoff Probability Threshold (Unconstrained)", 0.0, 1.0, 0.50
 )
 enforce_constraints = st.sidebar.checkbox(
-    "Enforce Playoff Constraints (6 AL + 6 NL)", value=True
+    "Enforce MLB Playoff Rules (Division Winners + Wild Cards)", value=True
 )
 
 st.sidebar.header("Visualization Options")
@@ -185,7 +393,8 @@ else:
     val_rankings = None
 
 # ======== Model Performance Metrics ========
-st.header("🎯 Model Performance Metrics")
+st.header("🎯 Unconstrained Model Performance Metrics")
+st.markdown("- Not accounting for teams in divisions and wildcard structure")
 
 accuracy = accuracy_score(y_val, y_pred)
 roc_auc = roc_auc_score(y_val, y_proba)
@@ -193,7 +402,6 @@ roc_auc = roc_auc_score(y_val, y_proba)
 col1, col2, col3 = st.columns(3)
 col1.metric("Model Accuracy", f"{accuracy:.2%}")
 col2.metric("ROC AUC", f"{roc_auc:.3f}")
-
 if enforce_constraints:
     predicted_playoffs = np.sum(y_pred)
     col3.metric("Predicted Playoff Teams (Check)", f"{predicted_playoffs}/12")
@@ -395,9 +603,42 @@ def create_sample_data():
     """Create sample data for testing playoff constraints"""
     np.random.seed(42)
 
-    # Create 30 teams (15 AL, 15 NL)
-    al_teams = [f"AL Team {i}" for i in range(1, 16)]
-    nl_teams = [f"NL Team {i}" for i in range(1, 16)]
+    # Use actual MLB team names
+    al_teams = [
+        "Baltimore Orioles",
+        "Boston Red Sox",
+        "New York Yankees",
+        "Tampa Bay Rays",
+        "Toronto Blue Jays",
+        "Chicago White Sox",
+        "Cleveland Guardians",
+        "Detroit Tigers",
+        "Kansas City Royals",
+        "Minnesota Twins",
+        "Houston Astros",
+        "Los Angeles Angels",
+        "Oakland Athletics",
+        "Seattle Mariners",
+        "Texas Rangers",
+    ]
+
+    nl_teams = [
+        "Atlanta Braves",
+        "Miami Marlins",
+        "New York Mets",
+        "Philadelphia Phillies",
+        "Washington Nationals",
+        "Chicago Cubs",
+        "Cincinnati Reds",
+        "Milwaukee Brewers",
+        "Pittsburgh Pirates",
+        "St. Louis Cardinals",
+        "Arizona Diamondbacks",
+        "Colorado Rockies",
+        "Los Angeles Dodgers",
+        "San Diego Padres",
+        "San Francisco Giants",
+    ]
 
     teams = al_teams + nl_teams
     leagues = [0] * 15 + [1] * 15  # 0 = AL, 1 = NL

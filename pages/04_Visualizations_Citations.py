@@ -41,6 +41,21 @@ with col1:
     ax.grid(True, alpha=0.3)
     st.pyplot(fig)
 
+    # Interpretation Guidelines
+    with st.expander("📖 Interpretation Guidelines - Probability Distribution"):
+        st.markdown("""
+        **Shape Analysis**:
+        - Right-skewed distribution is expected (most teams have low playoff chances)
+        - Peak around 0.1-0.3 indicates many teams with poor playoff odds
+        - Long tail extending to 1.0 represents genuinely competitive teams
+
+        **Threshold Impact**: Red line shows how many teams would make playoffs at 50% cutoff
+
+        **Separation Quality**: Clear gap around 0.5 threshold indicates good model discrimination
+
+        **Realistic Distribution**: Should roughly follow beta distribution (more teams with lower probabilities)
+        """)
+
 with col2:
     # Box plot of probabilities by league
     fig2, ax2 = plt.subplots(figsize=(8, 6))
@@ -65,6 +80,22 @@ with col2:
     ax2.set_title("Playoff Probability Distribution by League")
     ax2.grid(True, alpha=0.3)
     st.pyplot(fig2)
+
+    # Interpretation Guidelines
+    with st.expander("📖 Interpretation Guidelines - League Comparison"):
+        st.markdown("""
+        **Box Plot Components**:
+        - **Box**: Interquartile range (25th to 75th percentile)
+        - **Median Line**: 50th percentile (middle value)
+        - **Whiskers**: Extend to 1.5 × IQR or data extremes
+        - **Outliers**: Points beyond whiskers (unusually high/low probabilities)
+
+        **Analysis Guidelines**:
+        - **League Balance**: Similar box heights indicate balanced competition between leagues
+        - **Median Comparison**: Should be close to 0.4 (12 playoff spots / 30 teams)
+        - **Spread Analysis**: Wider boxes = more variability in team quality within league
+        - **Competitive Parity**: Similar distributions suggest model treats leagues fairly
+        """)
 
 # Plot 2: Feature Importance Visualization
 st.subheader("🎯 Feature Importance Analysis")
@@ -115,6 +146,22 @@ with col1:
     ax3.grid(True, alpha=0.3, axis="x")
     st.pyplot(fig3)
 
+    # Interpretation Guidelines
+    with st.expander("📖 Interpretation Guidelines - Feature Importance"):
+        st.markdown("""
+        **Color Coding**:
+        - **Light Blue**: Hitting statistics (HR, RBI, AVG, OBP, SLG)
+        - **Light Coral**: Pitching statistics (ERA, WHIP, SO, W, SV)
+        - **Light Green**: Team/League statistics
+
+        **Analysis Guidelines**:
+        - **Feature Ranking**: Longer bars indicate stronger predictive power
+        - **Category Balance**: Good models should use mix of hitting and pitching features
+        - **Pitching Dominance**: If pitching features dominate, suggests "pitching wins championships"
+        - **Surprise Features**: Unexpected high-ranking features may reveal hidden insights
+        - **Feature Engineering Success**: Presence of calculated stats (OBP, SLG) validates engineering efforts
+        """)
+
 with col2:
     # Pie chart of feature category importance
     category_scores = [
@@ -141,6 +188,21 @@ with col2:
         autotext.set_fontweight("bold")
 
     st.pyplot(fig4)
+
+    # Interpretation Guidelines
+    with st.expander("📖 Interpretation Guidelines - Feature Categories"):
+        st.markdown("""
+        **Expected Distributions**:
+        - **Balanced Model**: Roughly 40% pitching, 40% hitting, 20% team stats
+        - **Pitching-Heavy**: >50% pitching features (traditional baseball wisdom)
+        - **Offense-Oriented**: >50% hitting features (modern analytics trend)
+
+        **Analysis Guidelines**:
+        - **Category Dominance**: Heavily skewed percentages may indicate model bias
+        - **Validation Check**: Should align with baseball domain knowledge
+        - **Feature Selection Quality**: Balanced distribution suggests comprehensive feature set
+        - **Model Interpretability**: Clear category separation aids in explaining predictions
+        """)
 
 # Plot 3: League Performance Comparison
 st.subheader("⚾ League Performance Comparison Over Time")
@@ -191,6 +253,22 @@ ax5.plot(years, p_nl(years), "--", color="red", alpha=0.7, label="NL Trend")
 
 st.pyplot(fig5)
 
+# Interpretation Guidelines
+with st.expander("📖 Interpretation Guidelines - League Performance Over Time"):
+    st.markdown("""
+    **Chart Elements**:
+    - **Blue Line with Circles**: American League accuracy
+    - **Red Line with Squares**: National League accuracy
+    - **Dashed Lines**: Linear trend lines for each league
+
+    **Analysis Guidelines**:
+    - **Temporal Trends**: Upward trends indicate improving model performance
+    - **League Parity**: Similar accuracy levels indicate unbiased model
+    - **Accuracy Ranges**: Excellent (>80%), Good (70-80%), Needs Improvement (<70%)
+    - **Volatility Analysis**: High year-to-year variation suggests model instability
+    - **Recent Performance**: Focus on last 3-5 years for current model relevance
+    """)
+
 # ======== Model Insights ========
 st.header("🔍 Key Model Insights")
 
@@ -207,6 +285,39 @@ with col2:
 with col3:
     st.metric("Training Data Span", "30+ Years", "1990-2024")
     st.metric("Total Teams Analyzed", "30", "15 AL + 15 NL")
+
+# Interpretation Guidelines
+with st.expander("📖 Interpretation Guidelines - Model Insights"):
+    st.markdown("""
+    **Performance Metrics**:
+
+    **Average Model Accuracy**:
+    - **Good Range**: 65-75%
+    - **Excellent Range**: 75%+
+    - **Context**: Baseball's inherent randomness makes high accuracy challenging
+
+    **Best Performing League**:
+    - **Interpretation**: May indicate league-specific model strengths
+    - **Balance Check**: Large differences suggest potential model bias
+
+    **Most Important Feature**:
+    - **Common Leaders**: ERA, OPS, W-L record
+    - **Validation**: Should align with baseball conventional wisdom
+    - **Insight**: Reveals what drives playoff success
+
+    **Feature Categories**:
+    - **Expected**: 3 (Hitting, Pitching, Team)
+    - **Interpretation**: Comprehensive feature coverage ensures robust predictions
+
+    **Training Data Span**:
+    - **Minimum Recommended**: 20+ years
+    - **Optimal**: 30+ years for stable patterns
+    - **Trade-off**: More data vs. changing game dynamics
+
+    **Total Teams Analyzed**:
+    - **Expected**: 30 (current MLB structure)
+    - **Historical Note**: May vary due to expansion/contraction over time
+    """)
 
 # ======== Interactive Elements ========
 st.header("🎮 Interactive Analysis")
@@ -242,6 +353,24 @@ ax6.legend()
 ax6.grid(True, alpha=0.3)
 st.pyplot(fig6)
 
+# Interpretation Guidelines
+with st.expander(
+    "📖 Interpretation Guidelines - Interactive Threshold Analysis"
+):
+    st.markdown("""
+    **Threshold Selection Strategy**:
+    - **Too Low** (<0.3): Predicts too many playoff teams (>15)
+    - **Optimal** (0.4-0.6): Predicts 10-14 teams (realistic range)
+    - **Too High** (>0.7): Predicts too few teams (<8)
+
+    **Analysis Guidelines**:
+    - **Conservative**: Higher thresholds reduce false positives
+    - **Inclusive**: Lower thresholds reduce false negatives
+    - **Visual Feedback**: Histogram clearly shows impact of threshold changes
+    - **Model Calibration**: Well-calibrated models should need minimal threshold adjustment
+    - **Marginal Teams**: Teams near threshold line are most uncertain predictions
+    """)
+
 # ======== Statistical Summary ========
 st.header("📊 Statistical Summary")
 
@@ -269,6 +398,32 @@ summary_data = {
 
 summary_df = pd.DataFrame(summary_data)
 st.dataframe(summary_df, hide_index=True, use_container_width=True)
+
+# Interpretation Guidelines
+with st.expander("📖 Interpretation Guidelines - Statistical Summary"):
+    st.markdown("""
+    **Key Metrics Breakdown**:
+
+    **Overall Accuracy (68.5%)**:
+    - Good performance for sports prediction (baseball randomness makes >70% excellent)
+    - Outperforms simple heuristics (50-60%)
+
+    **Precision (72.3%)**:
+    - Of teams predicted for playoffs, 72.3% actually make it
+    - Low false positive rate, reliable for high-confidence predictions
+
+    **Recall (69.1%)**:
+    - Model identifies 69.1% of actual playoff teams
+    - Misses about 30% of playoff teams
+
+    **ROC AUC (0.745)**:
+    - Strong discriminative ability (0.5 = random, 1.0 = perfect)
+    - Good performance across probability thresholds
+
+    **Probability Statistics**:
+    - **Average (0.412)**: Well-calibrated, close to expected 12/30 = 0.40
+    - **Std Dev (0.287)**: Good separation between team quality levels
+    """)
 
 # ======== Data Sources & Citations ========
 st.header("📚 Data Sources & Citations")
@@ -336,14 +491,18 @@ st.markdown("""
 """)
 
 # ======== Acknowledgments ========
-st.header("🙏 Acknowledgments")
+st.header("Acknowledgments")
 
 st.markdown("""
 ### Development Team
+
 **Author**: Andrew Richard
+
 **Program**: Nashville Software School - Data Science Cohort 8
-**Mentors**: NSS Instructional Team
-**Timeline**: 2024-2025 Academic Year
+
+**Mentors**: Michael Holloway & Alexa Zylstra
+
+**Timeline**: 2024-2025 NSS Data Science 8 (DS8)
 
 ### Special Thanks
 - **Major League Baseball** for maintaining comprehensive statistical records
@@ -364,24 +523,22 @@ This project is developed for educational purposes. Data usage complies with MLB
 """)
 
 # ======== Contact Information ========
-st.header("📞 Contact & Support")
+st.header("Project Notes")
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
     ### Project Links
-    - **GitHub Repository**: [Coming Soon]
-    - **Documentation**: [Coming Soon]
-    - **Demo Video**: [Coming Soon]
+    - **GitHub Repository**: [Capstone](https://github.com/DrewRichard7/nss-capstone)
+    - **Documentation**: [ReadMe](https://github.com/DrewRichard7/nss-capstone/blob/main/README.md)
     """)
 
 with col2:
     st.markdown("""
     ### Contact Information
-    - **Email**: [Contact via NSS]
-    - **LinkedIn**: [Professional Profile]
-    - **Portfolio**: [Personal Website]
+    - **Email**: [Andrew Richard](nss-capstone.affair503@passmail.net)
+    - **Portfolio**: [Andrew Richard](https://andrew.iusevimbtw.com/)
     """)
 
 # Navigation footer
