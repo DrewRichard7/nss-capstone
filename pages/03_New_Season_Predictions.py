@@ -313,9 +313,9 @@ prediction_model = st.sidebar.selectbox(
 
 # Model info in sidebar
 model_descriptions = {
-    "XGBoost": "🌳 **Gradient Boosting**: Uses decision trees, great for complex patterns",
-    "Logistic Regression": "📈 **Linear Model**: Simple, interpretable, fast predictions",
-    "Ensemble (Average)": "🤝 **Best of Both**: Combines XGBoost + Logistic for robust results",
+    "XGBoost": "🌳 **Gradient Boosting**: Builds ensemble of decision trees sequentially, excellent at capturing non-linear patterns and feature interactions (97.25% CV ROC AUC)",
+    "Logistic Regression": "📈 **Linear Model**: Uses statistical regression with cross-validated regularization, highly interpretable with strong performance (97.75% CV ROC AUC)",
+    "Ensemble (Average)": "🤝 **Best of Both**: Combines predictions from both models using weighted averaging for maximum robustness and reliability",
 }
 st.sidebar.info(model_descriptions[prediction_model])
 
@@ -552,9 +552,11 @@ if uploaded_file is not None:
             if show_confidence:
                 st.markdown("""
                 **🎯 Confidence Guide:**
-                - **High Agreement + High Probabilities**: Very confident playoff prediction
-                - **High Agreement + Low Probabilities**: Very confident non-playoff prediction
-                - **Low Agreement**: Uncertain - could go either way!
+                - **High Agreement (>90%) + High Probabilities (>70%)**: Very confident playoff prediction
+                - **High Agreement (>90%) + Low Probabilities (<30%)**: Very confident non-playoff prediction
+                - **Medium Agreement (70-90%)**: Models mostly agree but some uncertainty
+                - **Low Agreement (<70%)**: Uncertain prediction - borderline team that could go either way
+                - **Probabilities 40-60%**: Toss-up teams regardless of agreement
                 """)
 
             display_comparison = comparison_df.copy()
@@ -828,11 +830,11 @@ with col2:
 
 st.info("""
 🎯 **Quick Start Guide:**
-1. **Beginners**: Try the sample data first to see how models work
-2. **Upload your data**: Use the expected format for best results
-3. **Compare models**: See how XGBoost vs Logistic Regression perform
-4. **Analyze results**: Look for high-confidence vs uncertain predictions
-5. **Download & share**: Save your predictions for further analysis
+1. **Beginners**: Try the sample data first to see how cross-validated models work
+2. **Upload your data**: Use the expected format (team stats through All-Star break) for best results
+3. **Compare models**: See how XGBoost (97.25% CV AUC) vs Logistic Regression (97.75% CV AUC) perform
+4. **Analyze results**: Look for high-confidence vs uncertain predictions and model agreement patterns
+5. **Download & share**: Save your predictions with probability scores for further analysis
 
-💡 **Remember**: Machine learning is about finding patterns in data - the better your data quality, the better your predictions!
+💡 **Remember**: These models achieved >97% cross-validation performance and 96.7% agreement - high-quality predictions depend on accurate input data!
 """)

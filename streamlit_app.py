@@ -199,7 +199,7 @@ def enforce_mlb_playoff_rules(probabilities, leagues, team_names):
         constrained_predictions: Binary array of playoff predictions
         league_rankings: DataFrame with detailed rankings including division info
     """
-    # Clean team names to handle Unicode characters and duplicates
+    # Clean team names to handle common formatting issues
     import re
 
     cleaned_team_names = []
@@ -207,106 +207,19 @@ def enforce_mlb_playoff_rules(probabilities, leagues, team_names):
         # Remove Unicode characters and normalize
         cleaned = re.sub(r"[^\w\s]", "", str(team)).strip()
 
-        # Remove duplicate words first (fix DiamondbacksDiamondbacks issue)
-        words = cleaned.split()
-        cleaned = " ".join(dict.fromkeys(words))
-
-        # Check for specific duplicate patterns and fix them
-        if (
-            "DiamondbacksDiamondbacks" in str(team)
-            or cleaned.count("Diamondbacks") > 1
-        ):
-            cleaned = "Arizona Diamondbacks"
-        elif "ExposExpos" in str(team) or cleaned.count("Expos") > 1:
+        # Handle legacy team names
+        if "Indians" in cleaned:
+            cleaned = "Cleveland Guardians"
+        elif "Devil Rays" in cleaned:
+            cleaned = "Tampa Bay Rays"
+        elif "Florida Marlins" in cleaned:
+            cleaned = "Miami Marlins"
+        elif "Montreal Expos" in cleaned:
             cleaned = "Montreal Expos"
-        elif "IndiansIndians" in str(team) or cleaned.count("Indians") > 1:
-            cleaned = "Cleveland Guardians"
-
-        # Handle specific team name cases and duplications
-        elif "Athletics" in cleaned and "Athletics" not in [
-            "Oakland Athletics"
-        ]:
-            cleaned = "Oakland Athletics"
-        elif "Guardians" in cleaned and cleaned != "Cleveland Guardians":
-            cleaned = "Cleveland Guardians"
-        elif "Indians" in cleaned or (
-            "Cleveland" in cleaned and "Guardians" not in cleaned
-        ):
-            cleaned = "Cleveland Guardians"  # Updated to current team name
+        elif "California Angels" in cleaned or "Anaheim Angels" in cleaned:
+            cleaned = "Los Angeles Angels"
         elif "St Louis Cardinals" in cleaned:
             cleaned = "St. Louis Cardinals"
-        elif "Cardinals" in cleaned and "St" in cleaned:
-            cleaned = "St. Louis Cardinals"
-        elif "Angels" in cleaned and (
-            "Los Angeles" in cleaned
-            or "Anaheim" in cleaned
-            or "California" in cleaned
-        ):
-            cleaned = "Los Angeles Angels"
-        elif "Devil Rays" in cleaned or (
-            "Tampa Bay" in cleaned and "Rays" in cleaned
-        ):
-            cleaned = "Tampa Bay Rays"
-        elif "Marlins" in cleaned and (
-            "Florida" in cleaned or "Miami" in cleaned
-        ):
-            cleaned = "Miami Marlins"
-        elif "Rays" in cleaned and cleaned != "Tampa Bay Rays":
-            cleaned = "Tampa Bay Rays"
-        elif "Marlins" in cleaned and cleaned != "Miami Marlins":
-            cleaned = "Miami Marlins"
-        elif "Nationals" in cleaned and cleaned != "Washington Nationals":
-            cleaned = "Washington Nationals"
-        elif "Rangers" in cleaned and cleaned != "Texas Rangers":
-            cleaned = "Texas Rangers"
-        elif "Angels" in cleaned and cleaned != "Los Angeles Angels":
-            cleaned = "Los Angeles Angels"
-        elif "Dodgers" in cleaned and cleaned != "Los Angeles Dodgers":
-            cleaned = "Los Angeles Dodgers"
-        elif "Padres" in cleaned and cleaned != "San Diego Padres":
-            cleaned = "San Diego Padres"
-        elif "Giants" in cleaned and cleaned != "San Francisco Giants":
-            cleaned = "San Francisco Giants"
-        elif "Rockies" in cleaned and cleaned != "Colorado Rockies":
-            cleaned = "Colorado Rockies"
-        elif "Diamondbacks" in cleaned and cleaned != "Arizona Diamondbacks":
-            cleaned = "Arizona Diamondbacks"
-        elif "Cardinals" in cleaned and cleaned != "St. Louis Cardinals":
-            cleaned = "St. Louis Cardinals"
-        elif "Pirates" in cleaned and cleaned != "Pittsburgh Pirates":
-            cleaned = "Pittsburgh Pirates"
-        elif "Brewers" in cleaned and cleaned != "Milwaukee Brewers":
-            cleaned = "Milwaukee Brewers"
-        elif "Reds" in cleaned and cleaned != "Cincinnati Reds":
-            cleaned = "Cincinnati Reds"
-        elif "Cubs" in cleaned and cleaned != "Chicago Cubs":
-            cleaned = "Chicago Cubs"
-        elif "Mets" in cleaned and cleaned != "New York Mets":
-            cleaned = "New York Mets"
-        elif "Phillies" in cleaned and cleaned != "Philadelphia Phillies":
-            cleaned = "Philadelphia Phillies"
-        elif "Braves" in cleaned and cleaned != "Atlanta Braves":
-            cleaned = "Atlanta Braves"
-        elif "Twins" in cleaned and cleaned != "Minnesota Twins":
-            cleaned = "Minnesota Twins"
-        elif "Royals" in cleaned and cleaned != "Kansas City Royals":
-            cleaned = "Kansas City Royals"
-        elif "Tigers" in cleaned and cleaned != "Detroit Tigers":
-            cleaned = "Detroit Tigers"
-        elif "White Sox" in cleaned and cleaned != "Chicago White Sox":
-            cleaned = "Chicago White Sox"
-        elif "Yankees" in cleaned and cleaned != "New York Yankees":
-            cleaned = "New York Yankees"
-        elif "Red Sox" in cleaned and cleaned != "Boston Red Sox":
-            cleaned = "Boston Red Sox"
-        elif "Orioles" in cleaned and cleaned != "Baltimore Orioles":
-            cleaned = "Baltimore Orioles"
-        elif "Blue Jays" in cleaned and cleaned != "Toronto Blue Jays":
-            cleaned = "Toronto Blue Jays"
-        elif "Mariners" in cleaned and cleaned != "Seattle Mariners":
-            cleaned = "Seattle Mariners"
-        elif "Astros" in cleaned and cleaned != "Houston Astros":
-            cleaned = "Houston Astros"
 
         cleaned_team_names.append(cleaned)
 
