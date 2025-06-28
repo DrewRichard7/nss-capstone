@@ -1,0 +1,869 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+
+        <title>MLB Playoff Prediction Using Machine Learning</title>
+
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/black.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/highlight/monokai.css"
+        />
+
+        <style>
+            :root {
+                --base-color: #001423;
+                --light-green: #22c55e;
+                --dark-green: #15803d;
+                --text-primary: #f8fafc;
+                --text-secondary: #cbd5e1;
+                --border-color: #334155;
+                --accent-bg: #0f1419;
+            }
+
+            .reveal {
+                font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+                font-size: clamp(20px, 2.5vw, 36px);
+                color: var(--text-primary);
+                background: var(--base-color);
+            }
+
+            .reveal .slides {
+                width: 100%;
+            }
+
+            .reveal .slides section {
+                padding: 10px 20px;
+                height: auto;
+                min-height: 100vh;
+                display: block;
+                text-align: left;
+                box-sizing: border-box;
+            }
+
+            .reveal h1,
+            .reveal h2,
+            .reveal h3 {
+                color: var(--text-primary);
+                font-weight: 600;
+                margin-bottom: 0.8em;
+                line-height: 1.2;
+            }
+
+            .reveal h1 {
+                font-size: clamp(1.4em, 4vw, 2.8em);
+                color: var(--light-green);
+                margin-bottom: clamp(0.2em, 1vh, 0.5em);
+            }
+
+            .reveal h2 {
+                font-size: clamp(1em, 3vw, 2em);
+                color: var(--light-green);
+                border-bottom: 2px solid var(--dark-green);
+                padding-bottom: clamp(0.1em, 0.5vh, 0.3em);
+                margin-bottom: clamp(0.2em, 1vh, 0.6em);
+            }
+
+            .reveal h3 {
+                font-size: clamp(0.8em, 2vw, 1.3em);
+                color: var(--dark-green);
+                font-weight: 500;
+                margin-bottom: clamp(0.1em, 0.5vh, 0.4em);
+            }
+
+            .reveal p {
+                font-size: clamp(0.65em, 1.5vw, 1em);
+                line-height: clamp(1.1, 1.4, 1.5);
+                margin-bottom: clamp(0.1em, 0.5vh, 0.5em);
+                color: var(--text-secondary);
+            }
+
+            .reveal ul,
+            .reveal ol {
+                font-size: clamp(0.6em, 1.4vw, 0.9em);
+                line-height: clamp(1.1, 1.3, 1.4);
+                margin: clamp(0.1em, 0.5vh, 0.5em) 0;
+                color: var(--text-secondary);
+            }
+
+            .reveal li {
+                margin-bottom: clamp(0.05em, 0.3vh, 0.3em);
+            }
+
+            /* Title slide */
+            .reveal .title-slide {
+                text-align: center;
+                background: var(--base-color);
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 20px;
+            }
+
+            .reveal .title-slide h1 {
+                font-size: 2.2em;
+                margin-bottom: 0.3em;
+            }
+
+            .reveal .title-slide .subtitle {
+                font-size: 1.1em;
+                color: var(--text-secondary);
+                font-weight: 400;
+                margin-bottom: 1em;
+            }
+
+            .reveal .title-slide .author {
+                font-size: 0.9em;
+                color: var(--text-primary);
+                margin-bottom: 1.5em;
+            }
+
+            .reveal .title-slide .question {
+                font-size: 1em;
+                color: var(--dark-green);
+                font-style: italic;
+            }
+
+            /* Content boxes */
+            .content-section {
+                background: var(--accent-bg);
+                border: 1px solid var(--border-color);
+                border-radius: clamp(4px, 0.5vw, 10px);
+                padding: clamp(0.3em, 1vh, 1em);
+                margin: clamp(0.1em, 0.5vh, 0.5em) 0;
+            }
+
+            .content-section h3 {
+                color: var(--light-green);
+                margin-bottom: clamp(0.1em, 0.5vh, 0.4em);
+                font-size: clamp(0.7em, 1.8vw, 1.1em);
+            }
+
+            .problem-section {
+                border-left: 4px solid #ef4444;
+            }
+
+            .opportunity-section {
+                border-left: 4px solid var(--light-green);
+            }
+
+            .data-section {
+                border-left: 4px solid #3b82f6;
+            }
+
+            /* Grid layouts */
+            .two-column {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: clamp(0.3em, 1.5vw, 1.5em);
+                align-items: start;
+            }
+
+            .three-column {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: clamp(0.2em, 1vw, 1em);
+                align-items: start;
+            }
+
+            /* Results highlighting */
+            .results-highlight {
+                background: var(--accent-bg);
+                border: 2px solid var(--light-green);
+                border-radius: clamp(6px, 1vw, 12px);
+                padding: clamp(0.4em, 1.2vh, 1em);
+                text-align: center;
+                margin: clamp(0.1em, 0.8vh, 0.8em) 0;
+            }
+
+            .metric-large {
+                font-size: clamp(1.2em, 3vw, 2.2em);
+                font-weight: bold;
+                color: var(--light-green);
+                display: block;
+            }
+
+            .metric-label {
+                font-size: clamp(0.5em, 1.2vw, 0.8em);
+                color: var(--text-secondary);
+                margin-top: clamp(0.1em, 0.3vh, 0.3em);
+            }
+
+            /* Technical items */
+            .tech-item {
+                background: var(--accent-bg);
+                border: 1px solid var(--border-color);
+                padding: clamp(0.4em, 1vh, 0.8em);
+                border-radius: clamp(4px, 0.5vw, 8px);
+                text-align: center;
+            }
+
+            .tech-item h3 {
+                font-size: clamp(0.7em, 1.6vw, 1em);
+                margin-bottom: clamp(0.2em, 0.5vh, 0.5em);
+                color: var(--light-green);
+            }
+
+            .tech-item ul {
+                text-align: left;
+                font-size: clamp(0.55em, 1.2vw, 0.75em);
+            }
+
+            /* Feature lists */
+            .feature-list {
+                background: var(--accent-bg);
+                padding: 0.5em;
+                border-radius: 6px;
+                border-left: 3px solid var(--dark-green);
+            }
+
+            .feature-list h3 {
+                color: var(--light-green);
+                margin-bottom: 0.3em;
+            }
+
+            /* Demo section */
+            .demo-section {
+                background: var(--accent-bg);
+                border: 2px dashed var(--dark-green);
+                padding: 0.8em;
+                text-align: center;
+                border-radius: 8px;
+                margin: 0.3em 0;
+            }
+
+            .demo-section h3 {
+                color: var(--light-green);
+                margin-bottom: 0.3em;
+            }
+
+            /* Emphasis styles */
+            .highlight {
+                color: var(--light-green);
+                font-weight: 600;
+            }
+
+            .emphasis {
+                color: var(--dark-green);
+                font-weight: 500;
+            }
+
+            /* Progress and controls */
+            .reveal .progress {
+                color: var(--light-green);
+            }
+
+            .reveal .controls {
+                color: var(--dark-green);
+            }
+
+            .reveal .slide-number {
+                color: var(--text-secondary);
+                background-color: rgba(0, 20, 35, 0.8);
+                border-radius: 4px;
+                padding: 5px 10px;
+            }
+
+            /* Responsive adjustments */
+            .reveal .slides section:not(.title-slide) {
+                padding-top: 5px;
+            }
+
+            @media (max-height: 800px) {
+                .reveal {
+                    font-size: clamp(16px, 2vw, 28px);
+                }
+
+                .reveal .slides section:not(.title-slide) {
+                    padding-top: 3px;
+                    padding-bottom: 3px;
+                }
+
+                .content-section {
+                    padding: clamp(0.2em, 0.5vh, 0.6em) !important;
+                    margin: clamp(0.1em, 0.3vh, 0.3em) 0 !important;
+                }
+            }
+
+            @media (max-height: 600px) {
+                .reveal {
+                    font-size: clamp(14px, 1.8vw, 24px);
+                }
+
+                .reveal .slides section:not(.title-slide) {
+                    padding: 2px 15px;
+                }
+            }
+
+            @media (max-width: 800px) {
+                .two-column,
+                .three-column {
+                    grid-template-columns: 1fr;
+                    gap: clamp(0.3em, 1vh, 0.8em);
+                }
+            }
+
+            @media (max-width: 600px) {
+                .reveal {
+                    font-size: clamp(14px, 3vw, 22px);
+                }
+            }
+
+            /* Dynamic compact slides that scale with content */
+            .compact-slide {
+                padding-top: 2px !important;
+            }
+
+            .compact-slide h2 {
+                font-size: clamp(0.9em, 2.5vw, 1.6em) !important;
+                margin-bottom: clamp(0.1em, 0.5vh, 0.4em) !important;
+                margin-top: 0 !important;
+            }
+
+            .compact-slide h3 {
+                font-size: clamp(0.7em, 1.8vw, 1.1em) !important;
+                margin-bottom: clamp(0.05em, 0.3vh, 0.3em) !important;
+            }
+
+            .compact-slide .content-section {
+                padding: clamp(0.2em, 0.8vh, 0.6em) !important;
+                margin: clamp(0.05em, 0.3vh, 0.3em) 0 !important;
+            }
+
+            .compact-slide .tech-item {
+                padding: clamp(0.25em, 0.7vh, 0.5em) !important;
+            }
+
+            .compact-slide .tech-item h3 {
+                font-size: clamp(0.65em, 1.4vw, 0.9em) !important;
+                margin-bottom: clamp(0.1em, 0.3vh, 0.3em) !important;
+            }
+
+            .compact-slide .tech-item ul {
+                font-size: clamp(0.5em, 1.1vw, 0.7em) !important;
+            }
+
+            .compact-slide .results-highlight {
+                padding: clamp(0.25em, 0.8vh, 0.6em) !important;
+                margin: clamp(0.05em, 0.3vh, 0.3em) 0 !important;
+            }
+
+            .compact-slide .metric-large {
+                font-size: clamp(1em, 2.5vw, 1.8em) !important;
+            }
+
+            .compact-slide .metric-label {
+                font-size: clamp(0.45em, 1vw, 0.7em) !important;
+            }
+
+            .compact-slide .two-column,
+            .compact-slide .three-column {
+                gap: clamp(0.15em, 0.8vw, 0.6em) !important;
+            }
+
+            .compact-slide ul,
+            .compact-slide ol {
+                font-size: clamp(0.5em, 1.2vw, 0.75em) !important;
+                line-height: clamp(1, 1.2, 1.3) !important;
+                margin: clamp(0.05em, 0.3vh, 0.2em) 0 !important;
+            }
+
+            .compact-slide li {
+                margin-bottom: clamp(0.02em, 0.2vh, 0.15em) !important;
+            }
+
+            .compact-slide p {
+                font-size: clamp(0.5em, 1.2vw, 0.75em) !important;
+                line-height: clamp(1.05, 1.2, 1.3) !important;
+                margin-bottom: clamp(0.02em, 0.2vh, 0.15em) !important;
+            }
+
+            /* Extra aggressive spacing for problematic slides */
+            .compact-slide .content-section p {
+                margin-bottom: clamp(0.01em, 0.1vh, 0.1em) !important;
+            }
+
+            .compact-slide .content-section ul {
+                margin: clamp(0.02em, 0.1vh, 0.1em) 0 !important;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <!-- Slide 1: Title Slide -->
+                <section class="title-slide">
+                    <h1>MLB Playoff Prediction Using Machine Learning</h1>
+                    <p class="subtitle">
+                        Predicting Baseball Success with Machine Learning
+                    </p>
+                    <div class="author">
+                        <p><strong>Andrew Richard</strong></p>
+                        <p>NSS Data Science Cohort 8 • Capstone Project</p>
+                    </div>
+                    <p class="question">
+                        Can we predict which teams make the playoffs using
+                        mid-season data?
+                    </p>
+                </section>
+
+                <!-- Slide 2: Problem Statement -->
+                <section class="compact-slide">
+                    <h2>Problem Statement</h2>
+
+                    <div class="problem-section content-section">
+                        <h3>The Challenge</h3>
+                        <ul>
+                            <li>
+                                30 MLB teams compete for only
+                                <span class="highlight">12 playoff spots</span>
+                                (40% success rate)
+                            </li>
+                            <li>
+                                Predictions must use
+                                <span class="highlight">mid-season data</span>
+                                (pre-All-Star break)
+                            </li>
+                            <li>
+                                Baseball has inherent randomness that makes
+                                prediction difficult
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="two-column">
+                        <div class="opportunity-section content-section">
+                            <h3>Applications</h3>
+                            <ul>
+                                <li>Sports analytics and team evaluation</li>
+                                <li>Fantasy sports decision making</li>
+                                <li>
+                                    Understanding statistical drivers of success
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="data-section content-section">
+                            <h3>Dataset</h3>
+                            <ul>
+                                <li>
+                                    <span class="emphasis">35 years</span> of
+                                    historical data (1990-2025)
+                                </li>
+                                <li>
+                                    <span class="emphasis">30+ statistics</span>
+                                    per team per season
+                                </li>
+                                <li>
+                                    <span class="emphasis">~1,000 records</span>
+                                    for model training
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Slide 3: Methodology -->
+                <section class="compact-slide">
+                    <h2>Methodology</h2>
+
+                    <div class="three-column">
+                        <div class="tech-item">
+                            <h3>Data Collection</h3>
+                            <ul>
+                                <li>Web scraping from MLB.com</li>
+                                <li>Rate limiting and error handling</li>
+                                <li>Pre-All-Star to full season mapping</li>
+                                <li>
+                                    Team hitting, pitching, and fielding metrics
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="tech-item">
+                            <h3>Machine Learning Models</h3>
+                            <ul>
+                                <li>XGBoost gradient boosting classifier</li>
+                                <li>Logistic regression with regularization</li>
+                                <li>5-fold stratified cross-validation</li>
+                                <li>Hyperparameter optimization</li>
+                            </ul>
+                        </div>
+
+                        <div class="tech-item">
+                            <h3>Evaluation Approach</h3>
+                            <ul>
+                                <li>ROC AUC for model performance</li>
+                                <li>Accuracy on hold-out test sets</li>
+                                <li>Feature importance analysis</li>
+                                <li>Model agreement assessment</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Key Innovation</h3>
+                        <p>
+                            Ensemble approach with
+                            <span class="highlight">96.7% model agreement</span>
+                            and enforcement of actual MLB playoff structure
+                            (division winners + wild cards).
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Slide 4: Results -->
+                <section class="compact-slide">
+                    <h2>Results</h2>
+
+                    <div class="results-highlight">
+                        <h3>Cross-Validation Performance</h3>
+                        <div class="two-column">
+                            <div>
+                                <span class="metric-large">97.75%</span>
+                                <div class="metric-label">
+                                    Logistic Regression ROC AUC
+                                </div>
+                            </div>
+                            <div>
+                                <span class="metric-large">97.25%</span>
+                                <div class="metric-label">XGBoost ROC AUC</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 1em">
+                            <span class="metric-large">86.7% / 90.0%</span>
+                            <div class="metric-label">
+                                2024 Test Set Accuracy (XGBoost / Logistic)
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="two-column">
+                        <div class="feature-list">
+                            <h3>Performance Context</h3>
+                            <ul>
+                                <li>
+                                    ROC AUC >97% is
+                                    <span class="highlight">exceptional</span>
+                                    for sports prediction
+                                </li>
+                                <li>
+                                    Baseball's randomness makes >90% accuracy
+                                    notable
+                                </li>
+                                <li>
+                                    Significantly outperforms baseline methods
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="feature-list">
+                            <h3>Most Important Features</h3>
+                            <ol>
+                                <li>
+                                    <span class="emphasis"
+                                        >Pitching Losses</span
+                                    >
+                                    - fewer losses indicate better performance
+                                </li>
+                                <li>
+                                    <span class="emphasis">Team Wins</span> -
+                                    direct success indicator
+                                </li>
+                                <li>
+                                    <span class="emphasis">ERA</span> - pitching
+                                    quality metric
+                                </li>
+                                <li>
+                                    <span class="emphasis">Saves</span> -
+                                    bullpen effectiveness
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Slide 5: Implementation -->
+                <section class="compact-slide">
+                    <h2>Implementation</h2>
+
+                    <div class="two-column">
+                        <div class="content-section">
+                            <h3>Application Features</h3>
+                            <ul>
+                                <li>
+                                    Interactive Streamlit dashboard with
+                                    multiple pages
+                                </li>
+                                <li>
+                                    Real-time 2025 season playoff probability
+                                    predictions
+                                </li>
+                                <li>
+                                    Model comparison and performance
+                                    visualization
+                                </li>
+                                <li>
+                                    Educational interpretations and statistical
+                                    guidance
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="content-section">
+                            <h3>Technical Implementation</h3>
+                            <ul>
+                                <li>
+                                    Automated data pipeline with error handling
+                                </li>
+                                <li>
+                                    Cross-validated model selection and
+                                    optimization
+                                </li>
+                                <li>One-command setup and deployment</li>
+                                <li>
+                                    Reproducible environment using Python 3.12
+                                    and UV
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="demo-section">
+                        <h3>Live Application Demo</h3>
+                        <p>
+                            Production-ready Streamlit application showcasing
+                            model predictions, performance metrics, and
+                            interactive visualizations
+                        </p>
+                        <p class="emphasis">
+                            Complete training pipeline executes in ~25 seconds
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Slide 6: Discussion -->
+                <section class="compact-slide">
+                    <h2>Discussion</h2>
+
+                    <div class="content-section">
+                        <h3>Key Findings</h3>
+                        <ul>
+                            <li>
+                                Pitching statistics are the strongest predictors
+                                of playoff success
+                            </li>
+                            <li>
+                                Cross-validation reveals both models achieve
+                                excellent generalization
+                            </li>
+                            <li>
+                                Mid-season data contains sufficient signal for
+                                accurate prediction
+                            </li>
+                            <li>
+                                Ensemble approach provides robust performance
+                                across different seasons
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="two-column">
+                        <div class="content-section">
+                            <h3>Limitations</h3>
+                            <ul>
+                                <li>
+                                    Limited to team-level statistics (no
+                                    player-specific data)
+                                </li>
+                                <li>
+                                    Does not account for mid-season trades or
+                                    injuries
+                                </li>
+                                <li>
+                                    Performance may vary in seasons with
+                                    significant rule changes
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="content-section">
+                            <h3>Future Work</h3>
+                            <ul>
+                                <li>
+                                    Integration of real-time data through APIs
+                                </li>
+                                <li>
+                                    Player-level analysis and injury impact
+                                    modeling
+                                </li>
+                                <li>
+                                    Extension to other professional sports
+                                    leagues
+                                </li>
+                                <li>
+                                    Cloud deployment for broader accessibility
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Slide 7: Conclusion -->
+                <section class="compact-slide">
+                    <h2>Conclusion</h2>
+
+                    <div class="content-section">
+                        <h3>Project Summary</h3>
+                        <p>
+                            This project successfully demonstrates that machine
+                            learning can predict MLB playoff outcomes with high
+                            accuracy using mid-season data. The
+                            <span class="highlight"
+                                >97%+ ROC AUC performance</span
+                            >
+                            achieved through cross-validated models represents
+                            strong predictive capability in the sports analytics
+                            domain.
+                        </p>
+                    </div>
+
+                    <div class="results-highlight">
+                        <h3>Technical Contributions</h3>
+                        <ul style="text-align: left">
+                            <li>
+                                Comprehensive data pipeline from collection to
+                                deployment
+                            </li>
+                            <li>
+                                Rigorous cross-validation methodology ensuring
+                                robust results
+                            </li>
+                            <li>
+                                Interactive application for model exploration
+                                and education
+                            </li>
+                            <li>
+                                Reproducible implementation with complete
+                                documentation
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="content-section">
+                        <p class="emphasis" style="text-align: center">
+                            The complete solution demonstrates practical
+                            application of data science principles to real-world
+                            sports prediction challenges.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Demo Transition -->
+                <section style="text-align: center">
+                    <h1>Live Application Demonstration</h1>
+                    <p style="font-size: 1.2em; color: var(--text-secondary)">
+                        Interactive dashboard showcasing model predictions and
+                        performance analysis
+                    </p>
+                </section>
+
+                <!-- Thank You -->
+                <section class="title-slide">
+                    <h1>Thank You</h1>
+                    <p class="subtitle">Questions and Discussion</p>
+                    <div class="author">
+                        <p><strong>Andrew Richard</strong></p>
+                        <p>NSS Data Science Cohort 8</p>
+                    </div>
+                    <div class="results-highlight" style="margin-top: 2em">
+                        <p style="color: var(--light-green); font-size: 1.1em">
+                            MLB Playoff Prediction with 97% ROC AUC Performance
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/notes/notes.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/markdown/markdown.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/highlight/highlight.js"></script>
+
+        <script>
+            // Dynamic sizing function
+            function adjustSlideContent() {
+                const slides = document.querySelectorAll(
+                    ".reveal .slides section",
+                );
+                const windowHeight = window.innerHeight;
+
+                slides.forEach((slide, index) => {
+                    if (slide.classList.contains("title-slide")) return;
+
+                    // Reset styles first
+                    slide.style.fontSize = "";
+                    slide.style.paddingTop = "";
+                    slide.style.paddingBottom = "";
+
+                    // Measure after reset
+                    setTimeout(() => {
+                        const slideContent = slide.scrollHeight;
+                        const availableHeight = windowHeight - 20; // Minimal padding
+
+                        if (slideContent > availableHeight) {
+                            // Content is too tall, make it more compact
+                            const scaleFactor = Math.max(
+                                0.6,
+                                availableHeight / slideContent,
+                            );
+                            slide.style.fontSize = `${scaleFactor}em`;
+                            slide.style.paddingTop = "1px";
+                            slide.style.paddingBottom = "1px";
+
+                            // Extra compact for problem slides
+                            if (slide.classList.contains("compact-slide")) {
+                                slide.style.fontSize = `${scaleFactor * 0.8}em`;
+                                slide.style.paddingTop = "0px";
+                                slide.style.paddingBottom = "0px";
+                            }
+                        }
+                    }, 10);
+                });
+            }
+
+            Reveal.initialize({
+                hash: true,
+                controls: true,
+                progress: true,
+                center: false,
+                transition: "slide",
+                transitionSpeed: "default",
+                backgroundTransition: "fade",
+                slideNumber: true,
+                showSlideNumber: "speaker",
+
+                plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
+            });
+
+            // Adjust content on load and resize
+            Reveal.on("ready", adjustSlideContent);
+            Reveal.on("slidechanged", adjustSlideContent);
+            window.addEventListener("resize", adjustSlideContent);
+        </script>
+    </body>
+</html>
