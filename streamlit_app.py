@@ -207,19 +207,46 @@ def enforce_mlb_playoff_rules(probabilities, leagues, team_names):
         # Remove Unicode characters and normalize
         cleaned = re.sub(r"[^\w\s]", "", str(team)).strip()
 
-        # Handle legacy team names
-        if "Indians" in cleaned:
-            cleaned = "Cleveland Guardians"
-        elif "Devil Rays" in cleaned:
-            cleaned = "Tampa Bay Rays"
-        elif "Florida Marlins" in cleaned:
-            cleaned = "Miami Marlins"
-        elif "Montreal Expos" in cleaned:
-            cleaned = "Montreal Expos"
-        elif "California Angels" in cleaned or "Anaheim Angels" in cleaned:
-            cleaned = "Los Angeles Angels"
-        elif "St Louis Cardinals" in cleaned:
-            cleaned = "St. Louis Cardinals"
+        # Handle specific duplicate patterns first (e.g., DiamondbacksDiamondbacks)
+        team_duplicates = {
+            "DiamondbacksDiamondbacks": "Arizona Diamondbacks",
+            "AthleticsAthletics": "Oakland Athletics",
+            "ExposExpos": "Montreal Expos",
+            "IndiansIndians": "Cleveland Guardians",
+            "GuardiansGuardians": "Cleveland Guardians",
+        }
+
+        for duplicate, correct in team_duplicates.items():
+            if duplicate in cleaned:
+                cleaned = correct
+                break
+        else:
+            # Remove duplicate words for other cases
+            words = cleaned.split()
+            cleaned = " ".join(dict.fromkeys(words))
+
+            # Handle team name standardization
+            if "Athletics" in cleaned:
+                cleaned = "Oakland Athletics"
+            elif "Indians" in cleaned:
+                cleaned = "Cleveland Guardians"
+            elif "Devil Rays" in cleaned:
+                cleaned = "Tampa Bay Rays"
+            elif "Florida Marlins" in cleaned:
+                cleaned = "Miami Marlins"
+            elif "Montreal Expos" in cleaned:
+                cleaned = "Montreal Expos"
+            elif "California Angels" in cleaned or "Anaheim Angels" in cleaned:
+                cleaned = "Los Angeles Angels"
+            elif "St Louis Cardinals" in cleaned:
+                cleaned = "St. Louis Cardinals"
+            # Handle other potential incomplete team names
+            elif "Diamondbacks" in cleaned and "Arizona" not in cleaned:
+                cleaned = "Arizona Diamondbacks"
+            elif "Guardians" in cleaned and "Cleveland" not in cleaned:
+                cleaned = "Cleveland Guardians"
+            elif "Angels" in cleaned and "Los Angeles" not in cleaned:
+                cleaned = "Los Angeles Angels"
 
         cleaned_team_names.append(cleaned)
 

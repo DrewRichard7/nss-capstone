@@ -1,5 +1,30 @@
 # MLB Playoff Prediction - Capstone Project
 
+## NSS DS8 Capstone Proposal - Andrew Richard
+
+### Executive Summary
+This project examines historical MLB data and builds machine learning models to predict playoff outcomes based on team performance statistics. Baseball is a sport rich in data, with decades of detailed statistics available. By leveraging this wealth of information, the project successfully determines which teams are most likely to make the playoffs and identifies the most influential factors in making accurate predictions. The final product includes XGBoost and Logistic Regression models with >97% ROC AUC performance and an interactive Streamlit dashboard.
+
+### Motivation
+- Previous NSS projects have used machine learning to analyze sports data, but this project takes a comprehensive approach to baseball playoff prediction using advanced cross-validation techniques and model optimization
+- MLB playoffs represent the ultimate achievement after a long regular season, and predicting playoff success is a classic challenge in sports analytics
+- Data is collected from [MLB.com](https://www.mlb.com/stats/team), which provides comprehensive team statistics for every MLB season
+- As a baseball fan, I was motivated by the opportunity to combine my interest in the sport with advanced data science and predictive modeling techniques
+
+### Data Questions
+- Which teams are most likely to make the playoffs based on regular season performance data?
+- What statistics or features are most important in making accurate predictions about playoff qualification?
+- How do different machine learning models compare in their ability to predict playoff outcomes?
+
+### Minimum Viable Product
+The minimum viable product is a complete machine learning pipeline that takes MLB season data and outputs playoff probabilities for each team, featuring:
+- Cross-validated XGBoost and Logistic Regression models with >97% ROC AUC
+- Interactive Streamlit dashboard with live 2025 predictions
+- Model comparison and ensemble predictions
+- Historical data exploration and visualization
+
+## Overview
+
 Predicts MLB playoff outcomes using XGBoost and Logistic Regression models trained on historical team statistics (1990-2025). Features interactive Streamlit dashboard with model comparison and 2025 season predictions.
 
 ## Quick Start
@@ -123,11 +148,32 @@ capstone/
 - Chrome browser (for web scraping)
 - Dependencies managed via `uv`
 
+## Schedule (Completed)
+- ✅ Get the Data - Web scraping pipeline from MLB.com (1990-2025)
+- ✅ Clean & Explore the Data - Data preprocessing and feature engineering
+- ✅ Model Development - XGBoost and Logistic Regression with cross-validation
+- ✅ Model Optimization - Hyperparameter tuning and performance validation
+- ✅ Dashboard Creation - Interactive Streamlit application
+- ✅ Project Completion - Full pipeline with automated setup
+
+## Data Sources
+- [MLB.com Team Statistics](https://www.mlb.com/stats/team) - Comprehensive team performance data (1990-2025)
+- Historical playoff data and team records
+- Pre-All-Star break statistics for current season predictions
+
+## Known Issues and Challenges (Resolved)
+- ✅ **Web Scraping Complexity**: Implemented robust scraping with rate limiting and error handling
+- ✅ **Playoff Qualification Variability**: Focused on regular season statistics that best predict playoff success
+- ✅ **Limited Postseason Data**: Used comprehensive regular season features and cross-validation for robust modeling
+- ✅ **Model Performance**: Achieved >97% ROC AUC through hyperparameter optimization and ensemble methods
+- ✅ **Data Quality**: Handled missing data and standardized formats across different seasons
+- ✅ **Years with No Playoffs**: Excluded 1994 and 2020 seasons from training data
+
 ## Data Source
 
 Team statistics scraped from [MLB.com](https://www.mlb.com/stats/team) with proper rate limiting and error handling.
 
 ---
 
-**Author**: Andrew Richard
+**Author**: Andrew Richard  
 **NSS Data Science Cohort 8**

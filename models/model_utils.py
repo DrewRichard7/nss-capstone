@@ -111,9 +111,15 @@ def get_model_predictions(X, xgb_model, logistic_model, scaler):
     Get predictions from both models
     Returns dictionary with probabilities and binary predictions
     """
-    # XGBoost predictions
-    dmatrix = xgb.DMatrix(X)
-    xgb_proba = xgb_model.predict(dmatrix)
+    # XGBoost predictions - handle both Booster and sklearn model formats
+    if hasattr(xgb_model, "predict_proba"):
+        # sklearn-style XGBoost model (from CV training)
+        xgb_proba = xgb_model.predict_proba(X)[:, 1]
+    else:
+        # Raw Booster model (legacy format)
+        dmatrix = xgb.DMatrix(X)
+        xgb_proba = xgb_model.predict(dmatrix)
+
     xgb_pred = (xgb_proba > 0.5).astype(int)
 
     # Logistic Regression predictions
@@ -182,8 +188,14 @@ def get_feature_importance_comparison(xgb_model, logistic_model, feature_names):
     Compare feature importance between models
     Returns DataFrame with importance scores from both models
     """
-    # XGBoost importance
-    xgb_importance = xgb_model.get_score(importance_type="weight")
+    # XGBoost importance - handle both XGBClassifier and Booster models
+    if hasattr(xgb_model, "feature_importances_"):
+        # sklearn-style XGBClassifier model (from CV training)
+        xgb_importance_array = xgb_model.feature_importances_
+        xgb_importance = dict(zip(feature_names, xgb_importance_array))
+    else:
+        # Raw Booster model (legacy format)
+        xgb_importance = xgb_model.get_score(importance_type="weight")
 
     # Logistic Regression coefficients (absolute values)
     logistic_coef = np.abs(logistic_model.coef_[0])
@@ -346,36 +358,49 @@ def get_xgboost_hyperparameters(xgb_model):
     """
     Extract hyperparameters from trained XGBoost model
     """
-    # Get attributes from the booster object
-    import json
+    # Handle both XGBClassifier and Booster models
+    if hasattr(xgb_model, "get_params"):
+        # sklearn-style XGBClassifier model (from CV training)
+        params = xgb_model.get_params()
+        hyperparams = {
+            "objective": params.get("objective", "binary:logistic"),
+            "learning_rate": params.get("learning_rate", 0.1),
+            "max_depth": params.get("max_depth", 6),
+            "subsample": params.get("subsample", 1.0),
+            "colsample_bytree": params.get("colsample_bytree", 1.0),
+            "tree_method": params.get("tree_method", "hist"),
+            "num_boost_round": params.get("n_estimators", 100),
+            "random_state": params.get("random_state", 42),
+            "reg_alpha": params.get("reg_alpha", 0),
+            "reg_lambda": params.get("reg_lambda", 1),
+        }
+    else:
+        # Raw Booster model (legacy format)
+        import json
 
-    # Get configuration and attributes
-    config = xgb_model.save_config()
-    config_dict = json.loads(config)
+        # Get configuration and attributes
+        config = xgb_model.save_config()
+        config_dict = json.loads(config)
 
-    # Extract parameters from the saved config
-    learner = config_dict.get("learner", {})
-    learner_params = learner.get("learner_model_param", {})
-    objective_params = learner.get("objective", {})
+        # Extract learner and objective parameters
+        learner_params = config_dict["learner"]["gradient_booster"][
+            "tree_train_param"
+        ]
+        objective_params = config_dict["learner"]["objective"]
 
-    # Get booster attributes which contain actual training parameters
-    attributes = xgb_model.attributes()
-
-    # Extract key hyperparameters with actual values used during training
-    hyperparams = {
-        "objective": objective_params.get("name", "binary:logistic"),
-        "learning_rate": float(learner_params.get("eta", "0.1")),
-        "max_depth": int(learner_params.get("max_depth", "6")),
-        "subsample": float(learner_params.get("subsample", "0.8")),
-        "colsample_bytree": float(
-            learner_params.get("colsample_bytree", "0.8")
-        ),
-        "tree_method": learner_params.get("tree_method", "hist"),
-        "num_boost_round": xgb_model.num_boosted_rounds(),
-        "random_state": int(learner_params.get("seed", "42")),
-        "eval_metric": "logloss",
-        "early_stopping_rounds": 10,  # From training script
-    }
+        # Extract key hyperparameters with actual values used during training
+        hyperparams = {
+            "objective": objective_params.get("name", "binary:logistic"),
+            "learning_rate": float(learner_params.get("eta", "0.1")),
+            "max_depth": int(learner_params.get("max_depth", "6")),
+            "subsample": float(learner_params.get("subsample", "0.8")),
+            "colsample_bytree": float(
+                learner_params.get("colsample_bytree", "0.8")
+            ),
+            "tree_method": learner_params.get("tree_method", "hist"),
+            "num_boost_round": xgb_model.num_boosted_rounds(),
+            "random_state": int(learner_params.get("seed", "42")),
+        }
 
     return hyperparams
 

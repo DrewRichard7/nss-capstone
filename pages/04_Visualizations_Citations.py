@@ -452,7 +452,6 @@ with st.expander("📖 Interpretation Guidelines - Statistical Summary"):
     - Our enhanced CV models achieve 97%+ ROC AUC with 86-90% accuracy
     - This represents exceptional performance for MLB playoff prediction
     - Model agreement of 96.7% indicates consistent, reliable predictions
-    """)
 
     **Recall (69.1%)**:
     - Model identifies 69.1% of actual playoff teams
