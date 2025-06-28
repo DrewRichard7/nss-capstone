@@ -14,24 +14,51 @@ from sklearn.metrics import (
 )
 
 
-def load_xgboost_model(path="assets/xgb_playoffs.pkl"):
-    """Load XGBoost model from pickle file"""
-    with open(path, "rb") as f:
-        raw = pickle.load(f)
-    bst = xgb.Booster()
-    bst.load_model(raw)
-    return bst
+def load_xgboost_model(path="assets/xgb_playoffs_cv.pkl"):
+    """Load XGBoost model from pickle file (defaults to cross-validated model)"""
+    try:
+        # Try to load CV model first
+        with open(path, "rb") as f:
+            model_data = pickle.load(f)
+        # Check if it's the new CV format
+        if isinstance(model_data, dict) and "model" in model_data:
+            return model_data["model"]
+        else:
+            # Old format - raw model
+            bst = xgb.Booster()
+            bst.load_model(model_data)
+            return bst
+    except FileNotFoundError:
+        # Fallback to original model if CV model not found
+        fallback_path = "assets/xgb_playoffs.pkl"
+        with open(fallback_path, "rb") as f:
+            raw = pickle.load(f)
+        bst = xgb.Booster()
+        bst.load_model(raw)
+        return bst
 
 
-def load_logistic_model(path="assets/logistic_playoffs.pkl"):
-    """Load Logistic Regression model and scaler from pickle file"""
-    with open(path, "rb") as f:
-        model_data = pickle.load(f)
-    return (
-        model_data["model"],
-        model_data["scaler"],
-        model_data["feature_names"],
-    )
+def load_logistic_model(path="assets/logistic_playoffs_cv.pkl"):
+    """Load Logistic Regression model and scaler from pickle file (defaults to cross-validated model)"""
+    try:
+        # Try to load CV model first
+        with open(path, "rb") as f:
+            model_data = pickle.load(f)
+        return (
+            model_data["model"],
+            model_data["scaler"],
+            model_data["feature_names"],
+        )
+    except FileNotFoundError:
+        # Fallback to original model if CV model not found
+        fallback_path = "assets/logistic_playoffs.pkl"
+        with open(fallback_path, "rb") as f:
+            model_data = pickle.load(f)
+        return (
+            model_data["model"],
+            model_data["scaler"],
+            model_data["feature_names"],
+        )
 
 
 def preprocess_for_models(df):
@@ -313,3 +340,113 @@ def get_ensemble_prediction(predictions, method="average"):
         "ensemble_proba": ensemble_proba,
         "ensemble_pred": ensemble_pred,
     }
+
+
+def get_xgboost_hyperparameters(xgb_model):
+    """
+    Extract hyperparameters from trained XGBoost model
+    """
+    # Get attributes from the booster object
+    import json
+
+    # Get configuration and attributes
+    config = xgb_model.save_config()
+    config_dict = json.loads(config)
+
+    # Extract parameters from the saved config
+    learner = config_dict.get("learner", {})
+    learner_params = learner.get("learner_model_param", {})
+    objective_params = learner.get("objective", {})
+
+    # Get booster attributes which contain actual training parameters
+    attributes = xgb_model.attributes()
+
+    # Extract key hyperparameters with actual values used during training
+    hyperparams = {
+        "objective": objective_params.get("name", "binary:logistic"),
+        "learning_rate": float(learner_params.get("eta", "0.1")),
+        "max_depth": int(learner_params.get("max_depth", "6")),
+        "subsample": float(learner_params.get("subsample", "0.8")),
+        "colsample_bytree": float(
+            learner_params.get("colsample_bytree", "0.8")
+        ),
+        "tree_method": learner_params.get("tree_method", "hist"),
+        "num_boost_round": xgb_model.num_boosted_rounds(),
+        "random_state": int(learner_params.get("seed", "42")),
+        "eval_metric": "logloss",
+        "early_stopping_rounds": 10,  # From training script
+    }
+
+    return hyperparams
+
+
+def get_logistic_hyperparameters(logistic_model):
+    """
+    Extract hyperparameters from trained Logistic Regression model
+    """
+    hyperparams = {
+        "penalty": logistic_model.penalty,
+        "C": logistic_model.C,
+        "solver": logistic_model.solver,
+        "max_iter": logistic_model.max_iter,
+        "class_weight": str(logistic_model.class_weight),
+        "random_state": logistic_model.random_state,
+        "fit_intercept": logistic_model.fit_intercept,
+        "intercept_scaling": logistic_model.intercept_scaling,
+    }
+
+    return hyperparams
+
+
+def get_all_model_hyperparameters():
+    """
+    Get hyperparameters for all trained models
+    Returns dictionary with hyperparameters for each model
+    """
+    try:
+        # Load CV models first, fallback to original models
+        try:
+            # Try to load CV model data with hyperparameters
+            with open("assets/xgb_playoffs_cv.pkl", "rb") as f:
+                xgb_model_data = pickle.load(f)
+            if (
+                isinstance(xgb_model_data, dict)
+                and "best_params" in xgb_model_data
+            ):
+                xgb_params = xgb_model_data["best_params"].copy()
+                xgb_params["model_type"] = "XGBoost (Cross-Validated)"
+                xgb_params["cv_score"] = xgb_model_data.get(
+                    "best_cv_score", "N/A"
+                )
+            else:
+                xgb_model = load_xgboost_model()
+                xgb_params = get_xgboost_hyperparameters(xgb_model)
+        except:
+            xgb_model = load_xgboost_model()
+            xgb_params = get_xgboost_hyperparameters(xgb_model)
+
+        try:
+            # Try to load CV model data with hyperparameters
+            with open("assets/logistic_playoffs_cv.pkl", "rb") as f:
+                logistic_model_data = pickle.load(f)
+            if (
+                isinstance(logistic_model_data, dict)
+                and "best_params" in logistic_model_data
+            ):
+                logistic_params = logistic_model_data["best_params"].copy()
+                logistic_params["model_type"] = (
+                    "Logistic Regression (Cross-Validated)"
+                )
+                logistic_params["cv_score"] = logistic_model_data.get(
+                    "best_cv_score", "N/A"
+                )
+            else:
+                logistic_model, _, _ = load_logistic_model()
+                logistic_params = get_logistic_hyperparameters(logistic_model)
+        except:
+            logistic_model, _, _ = load_logistic_model()
+            logistic_params = get_logistic_hyperparameters(logistic_model)
+
+        return {"XGBoost": xgb_params, "Logistic Regression": logistic_params}
+    except Exception as e:
+        return {"error": f"Could not load model hyperparameters: {str(e)}"}

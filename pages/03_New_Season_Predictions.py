@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -35,6 +37,28 @@ and watch as our trained models analyze the data and make playoff predictions be
 - Compare XGBoost vs Logistic Regression vs Ensemble predictions
 - Download results and understand model confidence levels
 """)
+
+# Check if using cross-validated models
+try:
+    with open("assets/logistic_playoffs_cv.pkl", "rb") as f:
+        logistic_cv_data = pickle.load(f)
+    with open("assets/xgb_playoffs_cv.pkl", "rb") as f:
+        xgb_cv_data = pickle.load(f)
+
+    st.success(
+        """
+    ✅ **Using Cross-Validated Models**: Enhanced models optimized through systematic hyperparameter tuning.
+    Logistic: {:.4f} CV ROC AUC | XGBoost: {:.4f} CV ROC AUC
+    """.format(
+            logistic_cv_data.get("best_cv_score", 0),
+            xgb_cv_data.get("best_cv_score", 0),
+        )
+    )
+except FileNotFoundError:
+    st.info("""
+    ℹ️ **Using Standard Models**: For enhanced performance, run `python models/run_cv_training.py`
+    to generate cross-validated models with optimized hyperparameters.
+    """)
 
 
 # ======== CACHED RESOURCE: load both models ========

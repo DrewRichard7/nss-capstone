@@ -1,5 +1,6 @@
 import glob
 import os
+import pickle
 
 import pandas as pd
 import streamlit as st
@@ -7,6 +8,7 @@ import streamlit as st
 from models.model_utils import (
     compare_model_metrics,
     create_prediction_comparison_df,
+    get_all_model_hyperparameters,
     get_ensemble_prediction,
     get_model_agreement_stats,
     get_model_predictions,
@@ -23,6 +25,28 @@ st.set_page_config(
 
 st.title("🏆 MLB 2025 Season Dashboard")
 st.markdown("### Current Season Standings & Playoff Predictions")
+
+# Check if using cross-validated models
+try:
+    with open("assets/logistic_playoffs_cv.pkl", "rb") as f:
+        logistic_cv_data = pickle.load(f)
+    with open("assets/xgb_playoffs_cv.pkl", "rb") as f:
+        xgb_cv_data = pickle.load(f)
+
+    st.success(
+        """
+    ✅ **Using Cross-Validated Models**: Enhanced models optimized through systematic hyperparameter tuning.
+    Logistic: {:.4f} CV ROC AUC | XGBoost: {:.4f} CV ROC AUC
+    """.format(
+            logistic_cv_data.get("best_cv_score", 0),
+            xgb_cv_data.get("best_cv_score", 0),
+        )
+    )
+except FileNotFoundError:
+    st.info("""
+    ℹ️ **Using Standard Models**: For enhanced performance, run `python models/run_cv_training.py`
+    to generate cross-validated models with optimized hyperparameters.
+    """)
 
 
 # ======== CACHED RESOURCE: load both models ========
@@ -471,6 +495,44 @@ if latest_data is not None:
         ["XGBoost", "Logistic Regression", "Ensemble (Average)"],
         index=0,
     )
+
+    # ======== Model Hyperparameters (Sidebar) ========
+    with st.sidebar.expander("⚙️ View Model Hyperparameters"):
+        st.markdown("**Current model settings:**")
+
+        hyperparams = get_all_model_hyperparameters()
+
+        if "error" not in hyperparams:
+            if selected_model == "XGBoost":
+                xgb_params = hyperparams["XGBoost"]
+                st.write("🌳 **XGBoost Parameters:**")
+                st.write(
+                    f"• Learning Rate: {xgb_params.get('learning_rate', 'N/A')}"
+                )
+                st.write(f"• Max Depth: {xgb_params.get('max_depth', 'N/A')}")
+                st.write(
+                    f"• Trees Built: {xgb_params.get('num_boost_round', 'N/A')}"
+                )
+
+            elif selected_model == "Logistic Regression":
+                lr_params = hyperparams["Logistic Regression"]
+                st.write("📈 **Logistic Regression Parameters:**")
+                st.write(f"• Regularization (C): {lr_params.get('C', 'N/A')}")
+                st.write(
+                    f"• Class Weight: {lr_params.get('class_weight', 'N/A')}"
+                )
+                st.write(
+                    f"• Max Iterations: {lr_params.get('max_iter', 'N/A')}"
+                )
+
+            else:  # Ensemble
+                st.write("🤝 **Ensemble Model:**")
+                st.write("• Combines XGBoost + Logistic Regression")
+                st.write("• Average of both model probabilities")
+
+            st.markdown("*See Model Analysis page for full details*")
+        else:
+            st.error("Could not load hyperparameters")
 
     # Use selected model probabilities for playoff predictions
     if selected_model == "XGBoost":

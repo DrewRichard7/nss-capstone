@@ -1,0 +1,65 @@
+{
+  "model_type": "Logistic Regression with GridSearchCV",
+  "best_cv_score": 0.9775422676971537,
+  "best_parameters": {
+    "C": 10.0,
+    "class_weight": null,
+    "max_iter": 1000,
+    "penalty": "l2",
+    "solver": "saga"
+  },
+  "training_time_seconds": 13.091021060943604,
+  "total_parameter_combinations_tested": 120,
+  "top_10_features": [
+    {
+      "feature": "P_L",
+      "coefficient": -3.979445385249999,
+      "abs_coefficient": 3.979445385249999
+    },
+    {
+      "feature": "P_W",
+      "coefficient": 3.6860970276484486,
+      "abs_coefficient": 3.6860970276484486
+    },
+    {
+      "feature": "P_R",
+      "coefficient": -1.893958238366237,
+      "abs_coefficient": 1.893958238366237
+    },
+    {
+      "feature": "P_H",
+      "coefficient": 1.7358212774992696,
+      "abs_coefficient": 1.7358212774992696
+    },
+    {
+      "feature": "P_AVG",
+      "coefficient": -1.57013820894798,
+      "abs_coefficient": 1.57013820894798
+    },
+    {
+      "feature": "H_HR",
+      "coefficient": -1.4760638463302473,
+      "abs_coefficient": 1.4760638463302473
+    },
+    {
+      "feature": "H_H",
+      "coefficient": -1.143462514828497,
+      "abs_coefficient": 1.143462514828497
+    },
+    {
+      "feature": "H_SLG",
+      "coefficient": 1.1290257752193817,
+      "abs_coefficient": 1.1290257752193817
+    },
+    {
+      "feature": "P_ERA",
+      "coefficient": 1.1115271383766594,
+      "abs_coefficient": 1.1115271383766594
+    },
+    {
+      "feature": "H_SO",
+      "coefficient": 1.0994267975181713,
+      "abs_coefficient": 1.0994267975181713
+    }
+  ]
+}

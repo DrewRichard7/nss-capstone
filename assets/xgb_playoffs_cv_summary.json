@@ -1,0 +1,61 @@
+{
+  "model_type": "XGBoost with RandomizedSearchCV",
+  "best_cv_score": 0.9725082136487375,
+  "best_parameters": {
+    "colsample_bylevel": 0.6391336642604005,
+    "colsample_bytree": 0.7966463500467329,
+    "gamma": 0.23673588539028284,
+    "learning_rate": 0.06196056097300456,
+    "max_depth": 8,
+    "min_child_weight": 5,
+    "n_estimators": 122,
+    "reg_alpha": 0.048058924197033726,
+    "reg_lambda": 4.796582926365543,
+    "subsample": 0.954672154919219
+  },
+  "training_time_seconds": 6.855831146240234,
+  "total_parameter_combinations_tested": 100,
+  "best_iteration": null,
+  "top_10_features": [
+    {
+      "feature": "P_L",
+      "importance": 0.21887074410915375
+    },
+    {
+      "feature": "P_W",
+      "importance": 0.1474458873271942
+    },
+    {
+      "feature": "P_ERA",
+      "importance": 0.08376345038414001
+    },
+    {
+      "feature": "P_SV",
+      "importance": 0.06977786123752594
+    },
+    {
+      "feature": "H_RBI",
+      "importance": 0.03443953022360802
+    },
+    {
+      "feature": "P_AVG",
+      "importance": 0.0340576209127903
+    },
+    {
+      "feature": "P_R",
+      "importance": 0.03351513296365738
+    },
+    {
+      "feature": "P_WHIP",
+      "importance": 0.022895587608218193
+    },
+    {
+      "feature": "H_OPS",
+      "importance": 0.021836869418621063
+    },
+    {
+      "feature": "H_SO",
+      "importance": 0.019911140203475952
+    }
+  ]
+}

@@ -1,195 +1,131 @@
 # MLB Playoff Prediction - Capstone Project
 
-Predicts MLB playoff outcomes using multiple machine learning models with historical team statistics (1990-2025). Features XGBoost, Logistic Regression, and ensemble predictions with comprehensive model comparison.
+Predicts MLB playoff outcomes using XGBoost and Logistic Regression models trained on historical team statistics (1990-2025). Features interactive Streamlit dashboard with model comparison and 2025 season predictions.
 
 ## Quick Start
 
 ### Automated Setup (Recommended)
 
 ```bash
-./FirstTimeRun.sh                    # Full dataset (1990-2025, ~40 minutes)
+# In your terminal, run:
+./FirstTimeRun.sh                    # Full dataset (1990-2025, ~30 minutes)
 ./FirstTimeRun.sh 2018 2023         # Recent years (6 years, ~15 minutes)
-./FirstTimeRun.sh 2020              # From 2020 to 2025 (6 years, ~15 minutes)
 ./FirstTimeRun.sh --help            # Show all options
 ```
 
 This automatically:
-- Sets up Python environment with `uv`
-- Collects MLB data for specified years
-- Cleans and processes the data
-- Trains both XGBoost and Logistic Regression models
-- Launches Streamlit dashboard with model comparison features
+- Sets up Python environment
+- Collects and processes MLB data
+- Trains both ML models
+- Launches interactive streamlit app
 
 ### Manual Setup
 
 ```bash
-# 1. Environment
+# Environment setup
 uv venv && source .venv/bin/activate && uv sync
 
-# 2. Data Collection
-python defs/baseball.py 2018 2023    # Command line
-python defs/baseball.py              # Interactive mode
+# Data pipeline
+python defs/baseball.py 2018 2023    # Collect data
+python defs/clean_data.py            # Clean data
 
-# 3. Data Cleaning
-python defs/clean_data.py
+# Train models (recommended: cross-validated)
+python models/run_cv_training.py     # Train optimized CV models
+# OR train original models
+python models/xgb_model.py           # Train XGBoost
+python models/logistic_model.py      # Train Logistic Regression
 
-# 4. Model Training
-python models/xgb_model.py          # Train XGBoost model
-python models/logistic_model.py     # Train Logistic Regression model
-
-# 5. Launch App
+# Launch dashboard
 streamlit run streamlit_app.py
 ```
 
-## Year Range Selection
+## Features
 
-Choose your data scope based on needs:
+### Cross-Validated Models (Enhanced)
+- **5-Fold Stratified Cross-Validation**: Ensures robust model evaluation
+- **Hyperparameter Optimization**: GridSearchCV (Logistic) + RandomizedSearchCV (XGBoost)
+- **Performance**: >97% ROC AUC on cross-validation
+- **Automatic Model Selection**: Uses best available models (CV preferred)
 
-| Range | Years | Time | Use Case |
-|-------|-------|------|----------|
-| `2023 2023` | 1 | ~6 min | Quick testing |
-| `2020 2023` | 3 | ~10 min | Recent analysis |
-| `2018 2023` | 5 | ~15 min | Medium dataset |
-| `2000 2010` | 11 | ~25 min | Decade study |
-| `1990 2025` | 34 | ~40 min | Full historical |
+### Multi-Model Comparison
+- **XGBoost**: Gradient boosting with optimized hyperparameters
+- **Logistic Regression**: Linear model with cross-validated regularization
+- **Ensemble**: Combines both models for robust predictions
+- **Model Agreement**: 96.7% prediction agreement between models
 
-**Available years**: 1990-2025 (excludes 1994 and 2020 - no data available)
+### Interactive Dashboard
+- **Current Season**: Live 2025 playoff predictions with CV model indicators
+- **Model Analysis**: Cross-validation methodology, hyperparameter details, stability analysis
+- **Historical Data**: Explore team statistics and playoff outcomes
+- **Visualizations**: Charts and metrics with data citations
 
-## Usage Examples
-
-### Development & Testing
+### Model Training Options
 ```bash
-./FirstTimeRun.sh 2023 2023          # Single year test
-python defs/baseball.py 2022 2023  # Recent data only
+# Recommended: Cross-validated models with optimization
+python models/run_cv_training.py        # ~25 seconds, optimized hyperparameters
+
+# Check model status and performance
+python models/upgrade_to_cv_models.py   # Status check and recommendations
+
+# Individual model demonstration
+python models/demo_cv_models.py         # See CV models in action
 ```
 
-### Analysis & Research
-```bash
-./FirstTimeRun.sh                    # Complete historical dataset
-./FirstTimeRun.sh 2000 2009         # Specific decade
-```
+### Model Performance
 
-### Interactive Mode
-```bash
-python defs/baseball.py
-# Prompts for start/end years with validation
-```
+**Cross-Validated Models (Recommended):**
+- **Logistic Regression**: 97.75% ROC AUC (5-fold CV), 86.7% validation accuracy
+- **XGBoost**: 97.25% ROC AUC (5-fold CV), 90.0% validation accuracy
+- **Model Agreement**: 96.7% consensus on predictions
+- **Training Time**: ~25 seconds for complete hyperparameter optimization
 
-## Model Performance
+**Original Models:**
+- **87% accuracy** on 2024 validation data
+- **94.4% ROC AUC** score
 
-### XGBoost Model
-- **Training Data**: 940 team records (1990-2023)
-- **Validation**: 30 team records (2024-2025)
-- **Accuracy**: 87% on 2024 validation data
-- **ROC AUC**: 94.4%
-- **Top Features**: Pitching losses (P_L), wins (P_W), strikeouts (H_SO)
-
-### Logistic Regression Model
-- **Training Data**: 940 team records (1990-2023)
-- **Validation**: 30 team records (2024-2025)
-- **Accuracy**: 87% on 2024 validation data
-- **ROC AUC**: 94.4%
-- **Top Features**: Pitching losses (P_L), wins (P_W), strikeouts (H_SO)
-
-### Ensemble Model
-- **Method**: Average of XGBoost and Logistic Regression probabilities
-- **Benefits**: Combines strengths of both models for robust predictions
-- **Use Case**: Default recommendation for most reliable results
-
-### Model Comparison Features
-- **Side-by-side predictions**: Compare all models on the same data
-- **Agreement analysis**: See where models agree/disagree
-- **Feature importance comparison**: Understand what each model values
-- **Interactive model selection**: Switch between models in real-time
+**Key Features**: Pitching losses (P_L), team wins (P_W), ERA (P_ERA), saves (P_SV)
 
 ## Data Pipeline
 
-1. **Web Scraping** (`baseball.py`): Collects team stats from MLB.com
-2. **Data Cleaning** (`clean_data.py`): Standardizes column names and formats
-3. **Model Training**: 
-   - `xgb_model.py`: Trains XGBoost classifier for playoff prediction
-   - `logistic_model.py`: Trains Logistic Regression classifier with feature scaling
-4. **Model Utilities** (`models/model_utils.py`): Functions for model comparison and ensemble predictions
-5. **Streamlit App** (`streamlit_app.py`): Interactive dashboard with multi-model support
+1. **Web Scraping**: Collect team stats from MLB.com (1990-2025)
+2. **Data Cleaning**: Standardize formats and handle missing data
+3. **Model Training**: Train XGBoost and Logistic Regression classifiers
+4. **Validation**: Test on held-out 2024-2025 data
 
-## Input Validation
+## Year Range Options
 
-All scripts validate inputs with helpful error messages:
+| Range | Years | Time | Best For |
+|-------|-------|------|----------|
+| `2023 2023` | 1 | ~5 min | Quick testing |
+| `2018 2023` | 6 | ~15 min | Recent analysis |
+| `1990 2025` | 34 | ~30 min | Full historical data |
 
-- Years must be between 1990-2025
-- End year must be ≥ start year
-- Automatically excludes problematic years (1994, 2020)
-- Shows preview of years to process before starting
-
-## Troubleshooting
-
-### Chrome Driver Issues
-The script automatically tries multiple Chrome driver methods:
-1. Update Chrome browser to latest version
-2. Restart the script (it will try different drivers)
-
-### No Data Generated
-- Ensure stable internet connection
-- Check that `data/` directory exists
-- Verify Chrome browser is installed
-
-### FirstTimeRun.sh Issues
-```bash
-chmod +x FirstTimeRun.sh             # Make executable
-./FirstTimeRun.sh --help            # Check usage
-```
+**Note**: Years 1994 and 2020 excluded (no playoff data available)
 
 ## Project Structure
 
 ```
 capstone/
-├── defs/
-│   ├── baseball.py          # Data collection with year input
-│   ├── clean_data.py        # Data preprocessing
-│   └── url_tester.py        # URL testing utility
-├── models/
-│   ├── xgb_model.py         # XGBoost model training
-│   ├── logistic_model.py    # Logistic Regression model training
-│   └── model_utils.py       # Model comparison utilities
-├── notebooks/
-│   └── eda.ipynb            # Exploratory data analysis
-├── data/                    # CSV files (created by scripts)
-├── assets/                  # Trained models (created by scripts)
-├── FirstTimeRun.sh          # Automated setup script
-└── streamlit_app.py         # Dashboard application
+├── defs/                    # Data collection and cleaning
+├── models/                  # ML model training and utilities
+├── pages/                   # Streamlit dashboard pages
+├── data/                    # Generated CSV files
+├── assets/                  # Trained model files
+├── FirstTimeRun.sh         # Automated setup script
+└── streamlit_app.py        # Main dashboard application
 ```
 
-## Technical Details
+## Requirements
 
-- **Web Scraping**: Selenium with undetected-chromedriver
-- **ML Models**: 
-  - XGBoost binary classifier with early stopping
-  - Logistic Regression with L2 regularization and feature scaling
-  - Ensemble averaging for robust predictions
-- **Data**: Team hitting/pitching stats, playoff results, World Series winners
-- **Features**: 37 statistical features per team per year
-- **Target**: Binary classification (made playoffs: yes/no)
-- **Model Selection**: Interactive comparison with agreement analysis
-
-## Dependencies
-
-Managed with `uv` (fast Python package manager):
-- pandas, numpy: Data manipulation
-- scikit-learn, xgboost: Machine learning
-- selenium, beautifulsoup4: Web scraping
-- streamlit: Dashboard
-- See `pyproject.toml` for complete list
+- Python 3.12+
+- Chrome browser (for web scraping)
+- Dependencies managed via `uv`
 
 ## Data Source
 
-**Primary Data Source**: [MLB.com Team Statistics](https://www.mlb.com/stats/team)
-- Historical team batting and pitching statistics (1990-2025)
-- Playoff results and World Series winners
-- Data collected via web scraping with proper rate limiting
-
-**Citation**: Major League Baseball. (n.d.). *Team Stats*. MLB.com. https://www.mlb.com/stats/team
+Team statistics scraped from [MLB.com](https://www.mlb.com/stats/team) with proper rate limiting and error handling.
 
 ---
 
-**Author**: Andrew Richard  
-**Program**: NSS Data Science Cohort 8
+**Author**: Andrew Richard
+**NSS Data Science Cohort 8**
